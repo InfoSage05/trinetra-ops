@@ -14,6 +14,15 @@ is being built in phases; only Phase 1 (inventory + billing core) is currently d
 Read this before implementing anything. It is the single source of truth for Phase 1 scope,
 data model, and architecture.
 
+**Implementation plan:** `docs/superpowers/plans/2026-10-20-phase1-inventory-billing.md` (v2,
+29 tasks). Execute tasks in order; each task's *Interfaces* block names exactly what it consumes
+and produces. Read the plan's "Global Constraints" and "Conventions" sections first.
+
+**Never bypass safety guards.** Prisma 7 refuses destructive commands (`migrate reset`,
+`db push --accept-data-loss`) when run by an AI agent unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+is set. Never set it yourself. Stop and ask the human. The same applies to `--no-verify`, force
+pushes, and dropping databases.
+
 **Historical context:** `docs/superpowers/specs/2026-10-20-trinetra-candles-full-context-and-phase1-plan.md`
 holds the full business background and the record of three review passes plus an external audit
 that corrected several early mistakes (invoice numbering mechanics, GST e-invoicing specifics,
