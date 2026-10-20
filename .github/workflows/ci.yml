@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: trinetra
+          POSTGRES_PASSWORD: trinetra
+          POSTGRES_DB: trinetra_test
+        ports:
+          - 5433:5432 # same port as local dev, so the committed .env.test works unchanged
+        options: >-
+          --health-cmd "pg_isready -U trinetra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://trinetra:trinetra@localhost:5433/trinetra_test
+          SESSION_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7

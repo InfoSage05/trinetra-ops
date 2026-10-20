@@ -1,0 +1,27 @@
+name: Nightly database backup
+
+on:
+  schedule:
+    - cron: "30 20 * * *" # 02:00 IST
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump with pg_dump 17 (matches the server version)
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: docker run --rm -e DATABASE_URL postgres:17 sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner' > backup.dump
+      - name: Encrypt (AES-256, passphrase from secrets)
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 \
+            -o "backup-$(date -u +%Y%m%d).dump.gpg" backup.dump
+          rm backup.dump
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup-*.dump.gpg
+          retention-days: 30
