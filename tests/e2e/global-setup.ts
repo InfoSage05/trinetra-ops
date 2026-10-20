@@ -21,5 +21,13 @@ export default async function globalSetup() {
   await f.makeCustomer({ name: "E2E Traders" });
   const product = await f.makeProduct({ sku: "E2E-1", name: "E2E Lavender Candle" });
   await f.addStock(product.id, "20.00");
+  const rose = await f.makeProduct({ sku: "E2E-2", name: "E2E Rose Candle" });
+  await f.addStock(rose.id, "5.00");
+  const jasmine = await f.makeProduct({ sku: "E2E-3", name: "E2E Jasmine Candle" });
+  await f.addStock(jasmine.id, "20.00");
+  await f.makeCustomer({ name: "Flow Traders" });
   await prisma.$disconnect();
+
+  // Warm the dev server so the first test is not racing route compilation.
+  for (const path of ["/login", "/api/health"]) await fetch(`http://localhost:3100${path}`).catch(() => undefined);
 }

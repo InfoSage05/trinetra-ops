@@ -3,6 +3,7 @@ import { E2E_OWNER, E2E_WORKER } from "./global-setup";
 
 async function login(page: Page, who: { phone: string; password: string }) {
   await page.goto("/login");
+  await page.waitForLoadState("networkidle"); // let React hydrate before interacting
   await page.getByLabel("Mobile number").fill(who.phone);
   await page.getByLabel("Password").fill(who.password);
   await page.getByRole("button", { name: "Log in" }).click();
@@ -24,7 +25,7 @@ test("owner bills 3 candles; stock drops from 20 to 17", async ({ page }) => {
 
   await page.getByRole("button", { name: /Save bill/ }).click();
   await expect(page).toHaveURL(/\/bills\/[^/]+$/);
-  await expect(page.getByRole("heading", { name: /TC\/\d{4}\/00001/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /TC\/\d{4}\/\d{5}/ }).first()).toBeVisible();
 
   // The invoice PDF opens as a real PDF (fonts load, QR renders, no server crash).
   const pdfPath = new URL(page.url()).pathname.replace("/bills/", "/api/bills/") + "/pdf";

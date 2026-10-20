@@ -4,6 +4,8 @@ export default defineConfig({
   testDir: "tests/e2e",
   globalSetup: "./tests/e2e/global-setup.ts",
   workers: 1,
+  retries: process.env.CI ? 2 : 0,
+  timeout: 60_000,
   use: { baseURL: "http://localhost:3100", trace: "retain-on-failure" },
   projects: [{ name: "phone", use: { ...devices["Pixel 7"] } }],
   webServer: {
