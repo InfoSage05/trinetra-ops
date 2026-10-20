@@ -5,7 +5,7 @@ import type { Prisma, StockLedgerEntry } from "@/generated/prisma/client";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { D, ZERO, toFixed2, type DecimalInput } from "@/lib/money";
-import { entityId, idempotencyKey, optionalText, parseInput, quantity, requiredText, signedQuantity } from "@/lib/validation";
+import { entityId, idempotencyKey, nonNegativeQuantity, optionalText, parseInput, quantity, requiredText, signedQuantity } from "@/lib/validation";
 
 export type LedgerType = "OPENING" | "PRODUCED" | "BILLED" | "RETURN" | "ADJUSTMENT";
 
@@ -133,5 +133,76 @@ export async function adjustStock(session: Session | null, rawInput: unknown): P
       createdBy: session.userId,
       idempotencyKey: `adjustment:${input.idempotencyKey}`,
     });
+  });
+}
+
+const openingImportSchema = z.object({
+  importBatchId: z.string().trim().min(3).max(100),
+  rows: z.array(z.object({ rowNumber: z.number().int(), sku: z.string().optional(), quantity: z.string().optional() })).max(2000),
+});
+
+export type OpeningPreview = {
+  ready: { rowNumber: number; productId: string; sku: string; name: string; quantity: string }[];
+  problems: { rowNumber: number; sku: string; message: string }[];
+};
+
+const openingKey = (batch: string, productId: string) => `opening:${batch}:${productId}`;
+
+async function buildOpeningPreview(db: Db, input: z.output<typeof openingImportSchema>): Promise<OpeningPreview> {
+  const skus = input.rows.map((r) => (r.sku ?? "").trim().toUpperCase()).filter(Boolean);
+  const products = await db.product.findMany({ where: { sku: { in: skus } } });
+  const bySku = new Map(products.map((p) => [p.sku, p]));
+  const priorOpenings = await db.stockLedgerEntry.findMany({
+    where: { type: "OPENING", productId: { in: products.map((p) => p.id) } },
+    select: { productId: true, idempotencyKey: true },
+  });
+
+  const ready: OpeningPreview["ready"] = [];
+  const problems: OpeningPreview["problems"] = [];
+  const seen = new Set<string>();
+
+  for (const row of input.rows) {
+    const sku = (row.sku ?? "").trim().toUpperCase();
+    const qty = nonNegativeQuantity.safeParse(row.quantity ?? "");
+    const product = bySku.get(sku);
+    const fail = (message: string) => problems.push({ rowNumber: row.rowNumber, sku, message });
+
+    if (!sku) fail("SKU is missing");
+    else if (seen.has(sku)) fail(`SKU ${sku} appears more than once in the file`);
+    else if (!product) fail(`No product with SKU ${sku}. Add or import it first.`);
+    else if (!product.isActive) fail(`${product.name} is inactive`);
+    else if (!qty.success) fail(qty.error.issues[0]?.message ?? "Invalid quantity");
+    else if (priorOpenings.some((o) => o.productId === product.id && o.idempotencyKey !== openingKey(input.importBatchId, product.id))) {
+      fail(`${product.name} already has opening stock from an earlier import. Use a stock count to correct it.`);
+    } else {
+      ready.push({ rowNumber: row.rowNumber, productId: product.id, sku, name: product.name, quantity: qty.data });
+    }
+    if (sku) seen.add(sku);
+  }
+  return { ready, problems };
+}
+
+export async function previewOpeningStock(session: Session | null, rawInput: unknown): Promise<OpeningPreview> {
+  requireRole(session, ["OWNER"]);
+  return buildOpeningPreview(prisma, parseInput(openingImportSchema, rawInput));
+}
+
+export async function importOpeningStock(session: Session | null, rawInput: unknown): Promise<{ imported: number }> {
+  requireRole(session, ["OWNER"]);
+  const input = parseInput(openingImportSchema, rawInput);
+  return prisma.$transaction(async (tx) => {
+    const preview = await buildOpeningPreview(tx, input);
+    if (preview.problems.length > 0) {
+      throw new ValidationError(`Fix ${preview.problems.length} problem(s) in the file before importing.`);
+    }
+    for (const line of preview.ready) {
+      if (D(line.quantity).isZero()) continue;
+      await writeLedgerEntry(tx, {
+        productId: line.productId, quantityDelta: line.quantity, type: "OPENING",
+        reason: `Opening stock import ${input.importBatchId}`, createdBy: session.userId,
+        idempotencyKey: openingKey(input.importBatchId, line.productId),
+      });
+    }
+    return { imported: preview.ready.length };
   });
 }
