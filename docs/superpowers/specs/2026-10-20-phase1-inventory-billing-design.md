@@ -51,8 +51,8 @@ above.
 | Scale | Small: dozens of SKUs, under 50 bills/day even at peak |
 | User roles | Separate logins, role-based: **owner** (father — full access, billing, financials) and **worker** (production entry, stock viewing only; no pricing/financials, no billing) |
 | Invoice type | Full GST tax invoice: GSTIN, HSN codes, CGST/SGST/IGST breakup, sequential invoice numbering |
-| E-invoicing (IRN/QR) | In scope — business turnover is above the GST e-invoicing threshold, so every invoice needs a government-issued IRN + QR code via the IRP |
-| Invoice numbering scheme | Postgres `SEQUENCE`, reset per financial year (e.g. `INV/2026-27/00001`) — avoids deriving the next number from `MAX(invoice_number)`, which races under concurrent finalize calls |
+| E-invoicing (IRN/QR) | Applicability and integration in scope; CA to confirm notified taxpayer and document coverage. B2C invoices do not use the IRN flow |
+| Invoice numbering scheme | Financial-year series within Rule 46's 16-character limit; use a serialized counter if a gapless series is confirmed as required. A PostgreSQL `SEQUENCE` can leave gaps on rollback |
 | Payment tracking | Yes — paid / partial / credit per bill, via an append-only payment log (not a single mutable field), with outstanding dues trackable per customer |
 | Inventory scope | Finished goods only (no raw materials / BOM in Phase 1) |
 | Bill output | Both printed (thermal/A4) and digital (PDF, shareable) |
@@ -141,23 +141,23 @@ without duplicating or reworking this logic.
 1. Owner starts a new bill, selects or creates the customer.
 2. Adding a line item: selecting a product shows its live available stock (computed from
    `stock_ledger`) immediately next to the quantity field.
-3. If the entered quantity exceeds available stock, the UI shows an inline warning (e.g. "Only 8
+3. If the entered order quantity exceeds available stock, the UI shows an inline warning (e.g. "Only 8
    available, you entered 10") but does not block entry — matches the agreed "warn, don't block"
    behavior.
-4. If a line is oversold, the father can still proceed after confirming, but the shortfall
-   (e.g. "2 units still owed") is captured on that line item rather than disappearing silently.
-5. On **Finalize Bill**, a single database transaction:
-   - Pulls the next invoice number from a per-financial-year `SEQUENCE` (not `MAX()+1`, which
-     races under concurrent finalize calls).
-   - Computes and *stores* the CGST/SGST/IGST split per line (CGST+SGST if customer state
-     matches the business's own state from `business_profile`, else IGST).
-   - Generates the IRN + QR code via the government IRP (required — turnover is above the
-     e-invoicing threshold).
-   - Records payment status and amount due.
-   - Writes one negative `stock_ledger` entry per line item, type `billed`, linked to the bill.
-   - If any step fails, nothing is partially saved — including the invoice number, since the
-     sequence advance and the bill row share the same transaction.
-6. Because "current stock" is computed live from the ledger, the updated number is immediately
+4. Record the order's unfulfilled amount. Invoice and deduct stock only according to the
+   confirmed invoice/physical-dispatch policy; if they do not happen together, retain separate
+   ordered, invoiced, and dispatched quantities.
+5. On **Finalize Bill**, a database transaction revalidates the payload and commits the invoice,
+   stock movements for physically dispatched units, and a durable IRP submission job. Assign the
+   financial-year invoice number using the selected counter; `SEQUENCE` values are not rolled
+   back, and gaps may occur.
+6. Submit applicable invoices to the IRP outside the transaction. Use retryable status handling
+   and reconciliation for timeouts. An applicable invoice is not shown as issued until IRP
+   acceptance; failed submissions appear in an operator queue. Never reuse a number or erase a
+   cancelled IRN.
+7. Determine CGST/SGST versus IGST using supplier location and legally determined place of
+   supply, including delivery facts, not only customer billing state. Store the tax breakdown.
+8. Because "current stock" is computed live from the ledger, the updated number is immediately
    visible to any other logged-in user, on any device, with no caching or sync step.
 
 **Production entry (stock increase):** A simple form ("Produced 200 units of Lavender Jar
@@ -251,3 +251,68 @@ UI test coverage, matching the scale of the team maintaining this.
 - Full offline support (mitigated instead by the documented manual fallback procedure above).
 - Hard-blocking overselling (deferred — current behavior is warn-and-allow; revisit if real-world
   use shows this causes problems).
+
+## 11. Independent Review Addendum (2026-10-20)
+
+This addendum supersedes conflicting statements above; the paired full-context plan contains the
+review sources and the end-to-end roadmap discussion.
+
+### Corrections required before implementation
+
+- **Invoice numbers:** PostgreSQL `SEQUENCE` values are unique under concurrency but do not roll
+  back, so the claim that rolling back a bill transaction cannot leave a numbering gap is false.
+  Rule 46 also limits the serial to 16 characters; `INV/2026-27/00001` is 17 characters. Confirm
+  with the CA whether to use a serialized per-financial-year counter for gapless assignment or a
+  sequence with retained void/cancel records. Never reuse an issued number.
+- **IRP integration:** A government IRP call cannot be part of a database transaction. Commit the
+  invoice payload, stock movements, and durable IRP job together; submit outside the transaction
+  with retry/reconciliation states. Do not expose an applicable invoice as issued until IRP
+  acceptance. Preserve a recovery queue for timeouts, failures, and cancellations.
+- **Applicability:** Turnover above the reported threshold does not mean every invoice gets an
+  IRN. Applicability depends on PAN-wide aggregate-turnover history, notified taxpayer
+  exemptions, and document type; B2C invoices are outside the IRN flow. Confirm the exact scope
+  with the CA and test against an IRP sandbox before cutover.
+- **Tax and invoice snapshots:** Tax must use supplier location and legally determined place of
+  supply, not just customer billing state. Capture delivery/ship-to facts. Freeze supplier,
+  customer, product-description, HSN, tax-rate, amount, and address snapshots on posted invoices
+  so a future master-data edit cannot change a reprint.
+- **Lifecycle coverage:** Define returns, cancellations/credit notes, invoice correction, and
+  compensating stock movements. Add explicit opening-stock import and physical-count
+  reconciliation. A movement ledger with no reversal/count workflow is not sufficient for
+  production use. Link each stock movement to its source bill line and enforce duplicate-post
+  protection.
+- **Separate order, invoice, and dispatch:** the current flow conflates all three. If a customer
+  orders 10 but only 8 are available, whether all 10 can be invoiced is a GST and fulfillment
+  decision. Model ordered, invoiced, and shipped quantities separately (or set a CA-approved
+  policy). Decrement on-hand only for physically dispatched units; track the remainder as an
+  open fulfillment obligation. Settle this before implementing oversell behavior.
+- **Payments:** derive unpaid/partial/paid and dues from append-only payments plus reversals;
+  define refund and overpayment behavior rather than maintaining duplicate mutable totals.
+- **Cutover and resilience:** Specify opening count/import, which system owns each transaction
+  during parallel run, daily reconciliation, duplicate-entry prevention, and rollback. Backups,
+  a restore rehearsal, account recovery, audit retention, and basic monitoring/runbooks are
+  launch prerequisites, not deferred seasonal hardening.
+- **Outage procedure:** do not simply enter paper bills later as today's normal bills. Preserve
+  the actual supply/invoice date, paper reference, stock movement, and IRP status; follow a
+  CA-approved process for legal issuance and IRP reporting without creating duplicate invoices.
+
+### Improve the shared backend for future AI workflows
+
+Retain the shared deterministic business commands, but make preview read-only and revalidate
+permissions, stock, prices, and invoice state at commit. Future AI workflows should create typed
+proposals that require human approval. Idempotency keys need an operation/source scope and retry
+must return the original result. Keep immutable posted ledger records in both code and database
+permissions; correct them with compensating records.
+
+### End-to-end roadmap
+
+The current Phase 1 foundation is reasonable for solving the Excel-versus-billing mismatch, but
+the broader business vision also includes order management, procurement, raw materials,
+production planning, yield/wastage, packaging, dispatch/shipping, and returns. Map one real order
+from first customer contact to delivery and payment before finalizing later phases. Add order-to-
+cash/fulfillment and procurement/manufacturing phases from that map; design Phase 3 as an order
+and fulfillment lifecycle with voice capture as one intake method.
+
+Useful open-source patterns: borrow traceable stock movements, reasons, source references,
+reversals, and count-versus-apply workflows from [Odoo's movement history](https://www.odoo.com/documentation/19.0/applications/inventory_and_mrp/inventory/warehouses_storage/reporting/moves_history.html)
+and [inventory adjustment process](https://www.odoo.com/documentation/18.0/applications/inventory_and_mrp/inventory/warehouses_storage/inventory_management/count_products.html).

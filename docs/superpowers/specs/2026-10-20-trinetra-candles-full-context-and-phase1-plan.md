@@ -73,14 +73,14 @@ that reason, not as a cost-saving measure.
 | Scale | Small — dozens of SKUs, under 50 bills/day even at peak | Keeps Phase 1 lean; avoids premature performance engineering |
 | User roles | Separate logins, role-based (owner = father, worker = shop-floor staff) | Owner sees full financials/pricing/billing; workers see only production entry and stock levels — deliberately limited visibility |
 | Invoicing | Full GST tax invoice (GSTIN, HSN codes, CGST/SGST/IGST breakup, sequential numbering) | Matches legal/commercial requirements already met by HDPOS today; non-negotiable for a swap-in replacement |
-| E-invoicing (IRN/QR) | **In scope** — business confirmed turnover is above the GST e-invoicing threshold | Legally required, not optional: every invoice must carry a government-issued IRN and QR code from the IRP. This is a real scope addition identified during review, not just a schema tweak — see Part D's GST Compliance Details |
-| Invoice numbering scheme | Postgres `SEQUENCE`, reset per financial year (e.g. `INV/2026-27/00001`) | Avoids the race condition of deriving the next number from `MAX(invoice_number)`, and matches standard GST practice (CGST Rule 46) of per-financial-year sequential numbering |
+| E-invoicing (IRN/QR) | **Applicability and integration in scope** — turnover was reported above the threshold; CA must confirm taxpayer and document applicability before launch | E-invoicing covers specified documents for notified taxpayers, with exemptions; it does not mean every retail B2C invoice receives an IRN. See GST Compliance Details. |
+| Invoice numbering scheme | Financial-year-specific series, with a serialized counter if the CA confirms a gapless series is required. Each invoice serial must fit Rule 46's 16-character limit. | PostgreSQL `SEQUENCE` is concurrency-safe but does not roll back values and can leave gaps. The former sample `INV/2026-27/00001` is 17 characters. |
 | Payments | Track paid / partial / credit per bill, via an append-only payment log (not a single mutable field), with per-customer outstanding dues | B2B/distributor sales commonly happen on credit, often paid off in installments; a log preserves *when* and *how much* was paid each time, matching the audit-trail principle already used for stock |
 | Inventory scope | Finished goods only — no raw material or bill-of-materials (BOM) tracking yet | Raw material/BOM tracking is a materially different, more complex data model (recipes, yield, wastage) and isn't required to fix the stated problem; deferred to a future phase if ever needed |
 | Bill output | Both printed (thermal/A4) and digital (PDF, shareable via WhatsApp/email) | Matches current practice (printed) while adding flexibility distributors increasingly expect (digital) |
 | Rollout | Parallel run alongside HDPOS before full cutover | Reduces risk during transition; avoids switching systems during the Diwali rush itself |
-| Overselling | Warn, but allow override — not hard-blocked | Real-world billing sometimes needs to proceed even if the ledger is momentarily behind physical reality; owner stays in control rather than being blocked |
-| Shortfall tracking | A minimal "units still owed" note is captured on the bill line item when overselling happens | Cheap stopgap confirmed during review: without this, Phase 1 only makes the stock *number* accurate, it doesn't record what's actually still owed to the customer — the full pending-orders workflow stays Phase 3's job |
+| Overselling | Warn, but allow override for an order; the invoice/dispatch policy must be confirmed | Owner stays in control, while order, invoice, and shipped quantities remain distinct if goods are not handed over at billing time |
+| Shortfall tracking | Track unfulfilled order quantity as an open fulfillment amount, not merely a free-text bill-line note | A note alone cannot safely represent whether the quantity was invoiced or shipped. Keep this minimal in Phase 1 only if invoices and dispatch usually happen together; otherwise add a small order/fulfillment record before launch. |
 | Peak-season billing bottleneck | Billing stays owner-only in Phase 1 (no worker-drafted bills) | Confirmed during review as a conscious, revisit-if-needed decision rather than an oversight — simplicity wins unless real Diwali-season usage proves the owner is a bottleneck |
 | Internet outage fallback | A documented manual (paper-based) fallback procedure, not a code feature | Confirmed during review: full offline support is still out of scope, but the single highest-stakes period (Diwali) is also the likeliest for connectivity hiccups, so an explicit non-code mitigation is required — see Part D's Outage Fallback Procedure |
 
@@ -139,28 +139,28 @@ phases):**
 ### Data Model
 - **`users`** — id, name, email, password_hash, role (`owner` | `worker`), created_at
 - **`business_profile`** — single-row settings: legal name, GSTIN, home state code, address.
-  Needed because CGST+SGST-vs-IGST determination requires comparing the *business's* state to
-  the customer's state, and nothing in the original design stored the business's own side of
-  that comparison.
-- **`customers`** — id, name, phone, address, state (a controlled GST state code, not free
-  text — avoids silently misclassifying tax due to "Odisha" vs "ODISHA" vs "Orissa"-style
-  mismatches), gstin (nullable, for B2B)
+  Needed to identify the supplier location for tax determination and to snapshot supplier
+  details onto issued invoices.
+- **`customers`** — id, name, phone, billing address, state (controlled GST state code), gstin
+  (nullable, for B2B). Capture delivery/ship-to address and legally determined place of supply
+  on each bill; do not infer tax treatment solely from billing state.
 - **`products`** — id, name, sku, unit, hsn_code, unit_price, gst_rate
-- **`stock_ledger`** — id, product_id, quantity_delta (+/-), type (`produced` | `billed` |
-  `adjustment`), reference_bill_id (nullable), reason (required for `adjustment`), created_by,
-  idempotency_key (nullable, unique), actor_type (`human` | `agent`, default `human`),
-  source_metadata (jsonb, nullable), created_at. *Current stock for a product =
-  `SUM(quantity_delta)` for that product.*
-- **`bills`** — id, invoice_number (assigned from a per-financial-year `SEQUENCE`, unique),
+- **`stock_ledger`** — id, product_id, quantity_delta (+/-), type (`opening` | `produced` |
+  `dispatched` | `return` | `adjustment`), source document/line reference, reason (required for
+  adjustment), created_by, idempotency key and provenance, created_at. Opening balances are
+  explicit dated movements. Posted entries are immutable; corrections append compensating
+  movements. Link each dispatch line and enforce duplicate-post protection. *Current stock for a
+  product = `SUM(quantity_delta)` for that product.*
+- **`bills`** — id, invoice_number (assigned from a financial-year series, unique),
   customer_id, bill_date, subtotal, cgst_total, sgst_total, igst_total, discount_total
   (nullable), round_off (nullable), tax_total, grand_total, place_of_supply (state code),
-  reverse_charge_applicable (boolean, default false), irn (nullable — government-issued Invoice
-  Reference Number), qr_code_data (nullable), payment_status (`paid` | `partial` | `credit`,
-  computed from `payment_log`), amount_due (computed), created_by, idempotency_key (nullable,
-  unique), actor_type, source_metadata (jsonb, nullable), created_at
-- **`bill_line_items`** — id, bill_id, product_id, quantity, unit_price, tax_rate, cgst_amount,
-  sgst_amount, igst_amount, line_total, shortfall_quantity (nullable — units still owed if this
-  line was billed while oversold), shortfall_note (nullable)
+  reverse_charge_applicable, IRP status and IRN/acknowledgement/QR payload when applicable,
+  immutable supplier/recipient snapshots, created_by, idempotency key and provenance, created_at.
+  Derive payment status and amount due from payment entries/reversals rather than storing
+  competing mutable values.
+- **`bill_line_items`** — id, bill_id, product_id plus immutable description/SKU/HSN/unit and
+  tax-rate snapshots, ordered/invoiced/dispatched quantities, unit_price, taxable_value,
+  persisted line tax split, line_total, and any outstanding fulfillment quantity.
 - **`payment_log`** — id, bill_id, amount, method (cash/UPI/bank transfer/cheque/etc.), paid_at,
   recorded_by, note (nullable). `bills.amount_paid`/`amount_due`/`payment_status` are computed
   from this log, the same way stock is computed from `stock_ledger` — a single running total
@@ -168,23 +168,29 @@ phases):**
   B2B business paying off dues in installments.
 
 ### Core Flow — Billing with Live Stock + Auto-Deduction
-1. Owner starts a bill, selects/creates the customer.
+1. Owner starts a draft bill/order and selects/creates the customer. Before implementation,
+   confirm whether billing and physical handover happen together in the usual workflow. If they
+   do, finalizing a bill can also post dispatch; if not, keep order, invoice, and dispatch
+   quantities/states separate.
 2. Selecting a product on a line item immediately shows live available stock (computed from
    `stock_ledger`).
 3. If entered quantity exceeds available stock, an inline warning appears (e.g. "Only 8
    available, you entered 10") — entry is not blocked.
-4. If any line is oversold, the father can still proceed, but must confirm — and the shortfall
-   (e.g. "2 units still owed") is captured on that line item rather than silently disappearing.
-5. On **Finalize Bill**, one database transaction: pulls the next invoice number from the
-   per-financial-year `SEQUENCE` (not derived from `MAX(invoice_number)`, which is the race
-   condition identified during review), computes and *stores* the CGST/SGST/IGST split per line
-   (CGST+SGST if customer state == business's own state from `business_profile`, else IGST),
-   generates the IRN + QR code via the government IRP (required — turnover is above the
-   e-invoicing threshold), and writes one negative `stock_ledger` entry per line item (type
-   `billed`, linked to the bill). All-or-nothing — no partial saves, and a failed finalize
-   cannot leave a gap-causing partial invoice number because the sequence advance and the bill
-   row are part of the same transaction.
-6. Because current stock is computed live, the updated number is visible immediately to anyone
+4. If an order line exceeds available stock, warn and allow the order, while recording its
+   unfulfilled quantity. Invoice only the amount permitted by the confirmed business/tax policy;
+   deduct stock for the physically dispatched quantity. If order and handover are always one
+   event, those quantities can be the same.
+5. On **Finalize Bill**, revalidate and commit the invoice payload, stock movements, and a
+   durable IRP-submission job in one database transaction. Allocate a number from a
+   financial-year counter; use a serialized counter if a gapless sequence is confirmed as
+   required. PostgreSQL `SEQUENCE` values survive rollback and may leave gaps. Determine tax
+   from supplier location and legally determined place of supply, capturing delivery details,
+   not merely the customer's billing state.
+6. Submit applicable invoices to the IRP outside the database transaction, using retry-safe
+   state handling and reconciliation for timeouts. Do not present an applicable invoice as
+   issued until IRP acceptance. Keep failed/void/cancelled numbers and audit history; never
+   silently reuse a number or delete an IRN. An IRP failure must appear in an operator queue.
+7. Because current stock is computed live, the updated number is visible immediately to anyone
    else logged in, on any device.
 
 **Production entry:** a simple form ("Produced 200 units of Lavender Jar Candle") writes a
@@ -221,14 +227,28 @@ Identified during review as under-specified in the original design; now explicit
   an optional one.
 - **Discount and round-off** are modeled as explicit, separate fields rather than folded into
   `subtotal`/`grand_total` opaquely.
-- **E-invoicing (IRN + QR code)** — in scope. The business's turnover is above the GST
-  e-invoicing threshold, so Phase 1 must integrate with the government IRP to generate an IRN
-  and QR code per invoice at finalize time. This is a genuine scope addition (a third-party API
-  dependency with its own credentials/sandbox-vs-production concerns), not just a schema
-  change, and should be sized accordingly in the implementation plan.
-- **Invoice numbering** resets per financial year via a Postgres `SEQUENCE` (e.g.
-  `INV/2026-27/00001`), matching standard GST practice (CGST Rule 46) and avoiding the
-  `MAX(invoice_number)+1` race condition identified during review.
+- **E-invoicing (IRN + QR code)** — applicability and integration are in scope, subject to
+  confirming PAN-wide aggregate-turnover history, taxpayer eligibility/exemptions, and document
+  classes with the business's CA. The ₹5 crore threshold generally applies to notified persons
+  based on aggregate turnover in any preceding FY from 2017-18; specified documents such as
+  B2B/export invoices are covered, while B2C invoices are outside the IRN reporting flow. Do not
+  state "every invoice". Validate current applicability and IRP rules before production launch.
+- **IRP is an external system.** It cannot participate in a PostgreSQL transaction. Use a durable
+  submission state machine/outbox with retry and reconciliation. Current IRP guidance limits
+  IRN cancellation to 24 hours; retain cancelled records, and process later corrections through
+  appropriate credit/debit notes. Include an exception queue/runbook and test against the IRP
+  sandbox.
+- **Invoice serial format.** Rule 46 requires a consecutive serial not exceeding 16 characters,
+  unique for a financial year, using permitted characters. The old example
+  `INV/2026-27/00001` is 17 characters. Choose a compliant series with the CA. PostgreSQL
+  `SEQUENCE` prevents collisions but is not gapless because values survive rollback. If a
+  gapless serial is confirmed as required, allocate through a per-FY serialized counter and
+  retain void/cancelled numbers; obtain CA advice on voids and gaps.
+- **Tax determination.** CGST+SGST versus IGST must use supplier location and legally determined
+  place of supply, not simply customer billing state. Capture delivery/ship-to and other
+  transaction facts. Make tax rates, HSN digit rules, reverse charge, discounts, rounding, and
+  invoice fields versioned/configurable and confirm candle SKUs and actual transaction types
+  with the CA.
 
 ### Outage Fallback Procedure
 
@@ -302,10 +322,84 @@ sub-agentic workflows" requirement).
 
 ## Part F — Review Findings & Resolutions
 
-Three independent review passes were run against this plan — business/domain fit, technical
-architecture/correctness, and future-extensibility for agentic workflows. All findings below have
-already been folded into Parts C/D above; this section exists as a record of what was found and
-how it was resolved.
+### Independent audit of this review copy (2026-10-20)
+
+This audit found several prior-review resolutions that were themselves incorrect or incomplete;
+the amendments below supersede conflicting claims above.
+
+**Must fix before implementation:**
+- PostgreSQL `SEQUENCE` values do not roll back. The original claim that invoice number and bill
+  row share one transaction and therefore cannot create a gap is false. Rule 46 requires a
+  consecutive serial of at most 16 characters. The proposed sample `INV/2026-27/00001` is 17
+  characters. Confirm with the CA whether a gapless counter is required; retain void/cancelled
+  serials either way.
+- IRP submission is a remote side effect and cannot be atomic with a database transaction. Save
+  the invoice and a durable submission job first, then use a retryable IRP state machine and
+  reconciliation. The prior plan's all-or-nothing invoice/IRN transaction is not implementable.
+- Above-threshold turnover does not mean every invoice receives an IRN. Applicability depends on
+  turnover calculation, notified taxpayer classes/exemptions, and document type. B2C invoices
+  are not covered by the IRN reporting flow. Validate with the CA and IRP sandbox before launch.
+- GST place of supply cannot be inferred solely from customer state. Capture delivery facts and
+  support the transaction-specific rules. Freeze supplier/customer/product/tax snapshots on
+  posted invoices so reprints remain legally identical after master-data edits.
+- Add explicit returns, cancellations/credit notes, invoice corrections, duplicate-submit
+  recovery, opening-stock import/count reconciliation, and an operator exception queue. An
+  append-only ledger without reversal flows is incomplete for a live sales system.
+- The current flow conflates customer order, tax invoice, and physical dispatch. If a customer
+  orders 10 but only 8 are available, deciding whether to invoice all 10 and record 2 "owed" is
+  a GST and fulfillment decision, not just a stock warning. Model ordered, invoiced, and shipped
+  quantities separately (or define a CA-approved policy); decrement on-hand stock only for
+  quantities physically dispatched, and retain the remaining quantity as an open fulfillment
+  obligation. This boundary should be settled before billing implementation.
+- A parallel run needs a precise cutover protocol: define which system is authoritative for each
+  sale/stock movement, avoid double posting, seed and count opening stock, reconcile daily, and
+  define rollback. Do not run two systems as independent stock truth.
+- Security, backups/restore rehearsal, audit retention, account recovery, and basic operational
+  monitoring/runbooks are launch requirements, not Phase 4 load hardening.
+
+**Architecture adjustments:**
+- Keep reusable deterministic domain commands, but have previews recalculate at commit and
+  recheck permissions/stock. Future AI should submit a typed proposal for human approval.
+  Scope idempotency keys by command/source and return the prior result on retries; provenance
+  should identify initiating user, approver, and source.
+- Treat `stock_ledger` as a source of truth only if posted entries are immutable in code and
+  database permissions, with compensating entries for corrections. Link each movement to its
+  originating bill line so retries cannot duplicate deductions.
+- Derive bill payment status and amount due from append-only payments and reversals rather than
+  storing competing mutable values. Define refunds and overpayments.
+- The full-context plan and the companion detailed design both need these corrections applied
+  before implementation; keep them aligned.
+
+**End-to-end roadmap gap:**
+The stated vision is broader than finished-stock billing: it includes supply, production,
+packaging, fulfillment, and shipping. Current phases omit order lifecycle, returns, raw-material
+procurement/receipts, BOM/yield/wastage, production work tracking, packaging, dispatch/delivery,
+and reconciliation with the existing accounting workflow. Do not force all of this into Phase 1.
+Before implementation, map one real order from customer request through dispatch/payment and
+identify which steps must become system-of-record. Add later phases for order-to-cash/fulfillment
+and procurement/manufacturing based on that map. Phase 3 should model a proper order and
+fulfillment lifecycle, not only voice capture and reminders.
+
+**Open source patterns worth borrowing:**
+- ERPNext's stock ledger and Odoo's stock-move history support the movement-based audit trail.
+  Borrow traceable source documents, adjustment reasons, reversals, and movement history; avoid
+  adding valuation/location features until needed.
+- Odoo's inventory adjustments distinguish a counted quantity from an applied adjustment.
+  Include a count/reconciliation workflow that records counted quantity, expected quantity,
+  delta, counter, and approval instead of asking users to guess an adjustment.
+
+**Primary references checked on 2026-10-20:**
+- [CBIC GST invoice rules](https://cbic-gst.gov.in/gst-invoice-rules.html) and [CGST Rules PDF](https://cbic-gst.gov.in/pdf/15102020_CGST-Rules-2017-Part-A-Rules.pdf): Rule 46 serial requirements and invoice particulars.
+- [GST Council Notification 10/2023](https://gstcouncil.gov.in/node/4365): notified ₹5 crore threshold effective 1 August 2023.
+- [IRIS IRP e-invoice FAQ](https://einvoice6.gst.gov.in/content/faq-powered-by-irisirp/) and [e-invoice mandate](https://einvoice6.gst.gov.in/content/einvoice-mandate/): document coverage and IRN/QR flow; [cancellation guidance](https://einvoice6.gst.gov.in/content/kb/cancelling-e-invoice/).
+- [PostgreSQL sequence documentation](https://www.postgresql.org/docs/current/functions-sequence.html): `nextval` is concurrent-safe but not rolled back and cannot guarantee gaplessness.
+- [Odoo stock move history](https://www.odoo.com/documentation/19.0/applications/inventory_and_mrp/inventory/warehouses_storage/reporting/moves_history.html) and [inventory adjustment procedure](https://www.odoo.com/documentation/18.0/applications/inventory_and_mrp/inventory/warehouses_storage/inventory_management/count_products.html).
+
+Three earlier review passes were run against this plan — business/domain fit,
+technical architecture/correctness, and future extensibility for agentic workflows. The
+independent audit above found additional errors in those earlier resolutions. Treat the audit
+addendum as the latest decision record; this historical section is retained for provenance, not
+as proof that every prior finding was correct.
 
 **Fixed directly (correctness/legal gaps, not matters of preference):**
 - No concurrency-safe invoice numbering mechanism → Postgres `SEQUENCE`, reset per financial
