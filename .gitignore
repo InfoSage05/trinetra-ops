@@ -50,3 +50,4 @@ next-env.d.ts
 /.superpowers/
 .rehearsal.dump
 .pgdata.log
+.dev.log
