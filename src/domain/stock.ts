@@ -1,8 +1,11 @@
 import Decimal from "decimal.js";
-import type { Db } from "@/lib/db";
+import { z } from "zod";
+import { prisma, type Db } from "@/lib/db";
 import type { Prisma, StockLedgerEntry } from "@/generated/prisma/client";
-import { DomainError, ValidationError } from "@/lib/errors";
+import { requireRole, type Session } from "@/lib/auth";
+import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { D, ZERO, toFixed2, type DecimalInput } from "@/lib/money";
+import { entityId, idempotencyKey, optionalText, parseInput, quantity, requiredText, signedQuantity } from "@/lib/validation";
 
 export type LedgerType = "OPENING" | "PRODUCED" | "BILLED" | "RETURN" | "ADJUSTMENT";
 
@@ -78,4 +81,57 @@ export async function writeLedgerEntry(db: Db, input: LedgerWrite): Promise<Stoc
     throw new DomainError("IDEMPOTENCY_CONFLICT", "This request was already processed with different details.");
   }
   return entry;
+}
+
+async function requireActiveProduct(db: Db, productId: string) {
+  const product = await db.product.findUnique({ where: { id: productId } });
+  if (!product) throw new NotFoundError("Product");
+  if (!product.isActive) throw new DomainError("PRODUCT_INACTIVE", `${product.name} is marked inactive.`);
+  return product;
+}
+
+export const recordProductionSchema = z.object({
+  productId: entityId,
+  quantity,
+  note: optionalText(300),
+  idempotencyKey,
+});
+
+export async function recordProduction(session: Session | null, rawInput: unknown): Promise<StockLedgerEntry> {
+  requireRole(session, ["OWNER", "WORKER"]);
+  const input = parseInput(recordProductionSchema, rawInput);
+  return prisma.$transaction(async (tx) => {
+    await requireActiveProduct(tx, input.productId);
+    return writeLedgerEntry(tx, {
+      productId: input.productId,
+      quantityDelta: input.quantity,
+      type: "PRODUCED",
+      reason: input.note,
+      createdBy: session.userId,
+      idempotencyKey: `production:${input.idempotencyKey}`,
+    });
+  });
+}
+
+export const adjustStockSchema = z.object({
+  productId: entityId,
+  quantityDelta: signedQuantity,
+  reason: requiredText("Reason", 300),
+  idempotencyKey,
+});
+
+export async function adjustStock(session: Session | null, rawInput: unknown): Promise<StockLedgerEntry> {
+  requireRole(session, ["OWNER"]);
+  const input = parseInput(adjustStockSchema, rawInput);
+  return prisma.$transaction(async (tx) => {
+    await requireActiveProduct(tx, input.productId);
+    return writeLedgerEntry(tx, {
+      productId: input.productId,
+      quantityDelta: input.quantityDelta,
+      type: "ADJUSTMENT",
+      reason: input.reason,
+      createdBy: session.userId,
+      idempotencyKey: `adjustment:${input.idempotencyKey}`,
+    });
+  });
 }
