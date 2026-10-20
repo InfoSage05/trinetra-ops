@@ -192,3 +192,14 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
     throw error;
   }
 }
+
+export async function listBillableProducts(session: Session | null) {
+  requireRole(session, ["OWNER"]);
+  const products = await prisma.product.findMany({
+    where: { isActive: true },
+    select: { id: true, sku: true, name: true, unit: true, unitPrice: true, gstRate: true },
+    orderBy: { name: "asc" },
+  });
+  const levels = await getStockLevels(prisma, products.map((p) => p.id));
+  return products.map((p) => ({ ...p, stock: levels.get(p.id) ?? ZERO }));
+}
