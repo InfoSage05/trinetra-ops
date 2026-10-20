@@ -14,6 +14,11 @@ export async function submitStockCount(session: Session | null, rawInput: unknow
   const input = parseInput(z.object({ productId: entityId, countedQuantity: nonNegativeQuantity, note: optionalText(300) }), rawInput);
   const product = await prisma.product.findUnique({ where: { id: input.productId } });
   if (!product) throw new NotFoundError("Product");
+  // A second pending count would be applied on top of the first (double-tap or two people counting).
+  const alreadyWaiting = await prisma.stockCount.findFirst({ where: { productId: product.id, approvedAt: null, discardedAt: null } });
+  if (alreadyWaiting) {
+    throw new DomainError("PENDING_COUNT_EXISTS", `A count for ${product.name} is already waiting for approval. The owner should approve or discard it first.`);
+  }
   const expected = await getCurrentStock(prisma, product.id);
   return prisma.stockCount.create({
     data: {

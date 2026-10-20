@@ -90,7 +90,7 @@ export async function listBills(session: Session | null, rawInput: unknown = {})
   const input = parseInput(
     z.object({
       search: z.string().trim().optional(),
-      status: z.enum(["PAID", "PARTIAL", "UNPAID"]).optional(),
+      status: z.enum(["PAID", "PARTIAL", "UNPAID", "DUE"]).optional(),
       take: z.number().int().min(1).max(500).default(100),
     }),
     rawInput
@@ -100,11 +100,15 @@ export async function listBills(session: Session | null, rawInput: unknown = {})
       ? { OR: [{ invoiceNumber: { contains: input.search, mode: "insensitive" } }, { customerName: { contains: input.search, mode: "insensitive" } }] }
       : {},
     orderBy: { billDate: "desc" },
-    take: input.take,
+    // A status filter depends on payments, so it must see every match before the limit is applied.
+    ...(input.status ? {} : { take: input.take }),
     select: { id: true, invoiceNumber: true, billDate: true, customerName: true, grandTotal: true },
   });
   const summaries = await getPaymentSummaries(prisma, bills.map((b) => b.id));
+  const matches = (status: PaymentStatus) =>
+    !input.status || (input.status === "DUE" ? status !== "PAID" : status === input.status);
   return bills
     .map((b) => ({ ...b, payment: summaries.get(b.id)! }))
-    .filter((b) => !input.status || b.payment.status === (input.status as PaymentStatus));
+    .filter((b) => matches(b.payment.status))
+    .slice(0, input.take);
 }

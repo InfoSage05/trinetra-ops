@@ -21,14 +21,18 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
   const [qty, setQty] = useState("");
   const [reason, setReason] = useState("");
   const [key, renewKey] = useIdempotencyKey();
+  const [busy, setBusy] = useState(false);
   const visible = rows.filter((r) => `${r.name} ${r.sku}`.toLowerCase().includes(search.toLowerCase()));
 
   async function submit() {
-    if (!mode) return;
+    if (!mode || busy) return;
+    setBusy(true);
     const pending = mode.kind === "produce"
       ? recordProductionAction({ productId: mode.row.id, quantity: qty, idempotencyKey: key })
       : adjustStockAction({ productId: mode.row.id, quantityDelta: qty, reason, idempotencyKey: key });
-    if (await callAction(pending, { success: mode.kind === "produce" ? "Production added" : "Stock corrected" })) {
+    const ok = await callAction(pending, { success: mode.kind === "produce" ? "Production added" : "Stock corrected" });
+    setBusy(false);
+    if (ok) {
       renewKey(); setMode(null); setQty(""); setReason(""); router.refresh();
     }
   }
@@ -65,7 +69,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
               <div className="space-y-1"><Label>Reason (required)</Label><Input className="h-11" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. broken, miscounted" /></div>
             )}
             {mode?.kind === "produce" && <p className="text-xs text-muted-foreground">This adds finished candles to stock. It does not check raw materials.</p>}
-            <Button size="lg" className="h-12" onClick={submit}>Save</Button>
+            <Button size="lg" className="h-12" disabled={busy} onClick={submit}>Save</Button>
           </div>
         </DialogContent>
       </Dialog>

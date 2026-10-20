@@ -86,3 +86,49 @@ export async function getInvoiceView(session: Session | null, billId: string) {
 }
 
 export type InvoiceView = Awaited<ReturnType<typeof getInvoiceView>>;
+
+export async function getCreditNoteView(session: Session | null, creditNoteId: string) {
+  requireRole(session, ["OWNER"]);
+  const note = await prisma.creditNote.findUnique({
+    where: { id: creditNoteId },
+    include: { bill: true, lines: { include: { billLineItem: true } }, irpSubmission: true },
+  });
+  if (!note) throw new NotFoundError("Credit note");
+  const bill = note.bill;
+  const interState = bill.supplierStateCode !== bill.placeOfSupply;
+  return {
+    id: note.id,
+    title: bill.customerGstin ? "CREDIT NOTE" : "CREDIT NOTE (B2C)",
+    creditNoteNumber: note.creditNoteNumber,
+    creditNoteDate: formatDateIN(note.noteDate),
+    originalInvoiceNumber: bill.invoiceNumber,
+    originalInvoiceDate: formatDateIN(bill.billDate),
+    reason: note.reason,
+    supplier: {
+      name: bill.supplierLegalName, gstin: bill.supplierGstin, address: bill.supplierAddress,
+      stateLabel: `${stateName(bill.supplierStateCode)} (${bill.supplierStateCode})`,
+    },
+    customer: {
+      name: bill.customerName, gstin: bill.customerGstin, address: bill.customerAddress,
+      stateLabel: `${stateName(bill.customerStateCode)} (${bill.customerStateCode})`,
+    },
+    placeOfSupplyLabel: `${stateName(bill.placeOfSupply)} (${bill.placeOfSupply})`,
+    interState,
+    lines: note.lines.map((l) => ({
+      id: l.id, productName: l.billLineItem.productName, hsnCode: l.billLineItem.hsnCode, unit: l.billLineItem.unit,
+      quantity: l.quantity, unitPrice: l.billLineItem.unitPrice, gstRate: l.billLineItem.gstRate,
+      taxableValue: l.taxableValue, cgstAmount: l.cgstAmount, sgstAmount: l.sgstAmount, igstAmount: l.igstAmount, lineTotal: l.lineTotal,
+    })),
+    totals: {
+      taxableTotal: note.taxableTotal, cgstTotal: note.cgstTotal, sgstTotal: note.sgstTotal, igstTotal: note.igstTotal,
+      taxTotal: note.taxTotal, roundOff: note.roundOff, grandTotal: note.grandTotal,
+    },
+    amountInWords: amountInWords(note.grandTotal),
+    restocked: note.restock,
+    irp: note.irpSubmission
+      ? { status: note.irpSubmission.status, irn: note.irpSubmission.irn, ackNumber: note.irpSubmission.ackNumber }
+      : null,
+  };
+}
+
+export type CreditNoteView = Awaited<ReturnType<typeof getCreditNoteView>>;

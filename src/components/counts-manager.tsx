@@ -18,12 +18,15 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
   const [productId, setProductId] = useState("");
   const [counted, setCounted] = useState("");
   const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (await callAction(submitStockCountAction({ productId, countedQuantity: counted, note }), { success: isOwner ? "Count saved. Approve it below." : "Count sent to the owner" })) {
-      setCounted(""); setNote(""); router.refresh();
-    }
+    if (busy) return;
+    setBusy(true);
+    const ok = await callAction(submitStockCountAction({ productId, countedQuantity: counted, note }), { success: isOwner ? "Count saved. Approve it below." : "Count sent to the owner" });
+    setBusy(false);
+    if (ok) { setCounted(""); setNote(""); router.refresh(); }
   }
 
   return (
@@ -42,7 +45,7 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
             </div>
             <div className="space-y-1"><Label htmlFor="counted">Counted quantity</Label><Input id="counted" className="h-14 text-2xl" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} required /></div>
             <div className="space-y-1"><Label htmlFor="note">Note (optional)</Label><Input id="note" className="h-11" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-            <Button type="submit" size="lg" className="h-12">Save count</Button>
+            <Button type="submit" size="lg" className="h-12" disabled={busy}>Save count</Button>
           </form>
         </CardContent>
       </Card>

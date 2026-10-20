@@ -45,28 +45,53 @@ export async function recordReturn(session: Session | null, rawInput: unknown): 
       const previous = await tx.creditNoteLine.groupBy({
         by: ["billLineItemId"],
         where: { billLineItemId: { in: bill.lineItems.map((l) => l.id) } },
-        _sum: { quantity: true, taxableValue: true },
+        _sum: { quantity: true, taxableValue: true, cgstAmount: true, sgstAmount: true, igstAmount: true },
       });
-      const prev = new Map(previous.map((p) => [p.billLineItemId, { qty: D(p._sum.quantity ?? 0), taxable: D(p._sum.taxableValue ?? 0) }]));
+      const prev = new Map(previous.map((p) => [p.billLineItemId, {
+        qty: D(p._sum.quantity ?? 0), taxable: D(p._sum.taxableValue ?? 0),
+        cgst: D(p._sum.cgstAmount ?? 0), sgst: D(p._sum.sgstAmount ?? 0), igst: D(p._sum.igstAmount ?? 0),
+      }]));
       const interState = isInterState(bill.supplierStateCode, bill.placeOfSupply);
 
       const lines = input.lines.map((requested) => {
         const original = bill.lineItems.find((l) => l.id === requested.billLineItemId);
         if (!original) throw new ValidationError("That item is not on this bill.");
-        const already = prev.get(original.id) ?? { qty: ZERO, taxable: ZERO };
+        const already = prev.get(original.id) ?? { qty: ZERO, taxable: ZERO, cgst: ZERO, sgst: ZERO, igst: ZERO };
         const returnable = D(original.quantity).minus(already.qty);
         const qty = D(requested.quantity);
         if (qty.greaterThan(returnable)) {
           throw new ValidationError(`Only ${formatQuantity(returnable)} of ${original.productName} can still be returned.`);
         }
-        const taxableValue = qty.equals(returnable)
+        const finalReturn = qty.equals(returnable);
+        const taxableValue = finalReturn
           ? D(original.taxableValue).minus(already.taxable) // last return of this line: exact remainder
           : round2(D(original.taxableValue).div(D(original.quantity)).times(qty));
-        const tax = taxOnTaxableValue(taxableValue, original.gstRate, interState);
-        return { original, qty, taxableValue, ...tax, lineTotal: taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount) };
+        // Last return reverses exactly the tax that is still outstanding, so credits never exceed what was charged.
+        const tax = finalReturn
+          ? {
+              cgstAmount: D(original.cgstAmount).minus(already.cgst),
+              sgstAmount: D(original.sgstAmount).minus(already.sgst),
+              igstAmount: D(original.igstAmount).minus(already.igst),
+            }
+          : taxOnTaxableValue(taxableValue, original.gstRate, interState);
+        return { original, qty, taxableValue, finalReturn, ...tax, lineTotal: taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount) };
       });
 
       const totals = computeTotals(lines);
+      // Credit notes carry exact paise. Only the return that completes the whole invoice absorbs the
+      // invoice's rupee round-off, so partial returns always add up to exactly the invoice total.
+      const completesInvoice = bill.lineItems.every((l) => {
+        const requested = lines.find((x) => x.original.id === l.id);
+        const done = (prev.get(l.id)?.qty ?? ZERO).plus(requested?.qty ?? ZERO);
+        return done.equals(D(l.quantity));
+      });
+      const exact = totals.taxableTotal.plus(totals.taxTotal);
+      let grandTotal = exact;
+      if (completesInvoice) {
+        const earlier = await tx.creditNote.aggregate({ where: { billId: bill.id }, _sum: { grandTotal: true } });
+        grandTotal = D(bill.grandTotal).minus(D(earlier._sum.grandTotal ?? 0));
+      }
+      const roundOff = grandTotal.minus(exact);
       const financialYear = financialYearOf();
       const creditNoteNumber = await allocateNumber(tx, "CREDIT_NOTE", financialYear);
 
@@ -74,8 +99,8 @@ export async function recordReturn(session: Session | null, rawInput: unknown): 
         data: {
           creditNoteNumber, financialYear, billId: bill.id, reason: input.reason, restock: input.restock,
           taxableTotal: toFixed2(totals.taxableTotal), cgstTotal: toFixed2(totals.cgstTotal), sgstTotal: toFixed2(totals.sgstTotal),
-          igstTotal: toFixed2(totals.igstTotal), taxTotal: toFixed2(totals.taxTotal), roundOff: toFixed2(totals.roundOff),
-          grandTotal: toFixed2(totals.grandTotal), createdBy: session.userId, idempotencyKey: key,
+          igstTotal: toFixed2(totals.igstTotal), taxTotal: toFixed2(totals.taxTotal), roundOff: toFixed2(roundOff),
+          grandTotal: toFixed2(grandTotal), createdBy: session.userId, idempotencyKey: key,
           lines: {
             create: lines.map((l) => ({
               billLineItemId: l.original.id, productId: l.original.productId, quantity: toFixed2(l.qty),

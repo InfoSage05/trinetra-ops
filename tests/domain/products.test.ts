@@ -34,7 +34,8 @@ describe("products", () => {
     await updateProduct(owner, { id: p.id, ...lavender, unitPrice: "160" });
     await setProductActive(owner, { id: p.id, isActive: false });
 
-    expect((await listProducts(worker, { search: "jar" })).map((x) => x.name)).toEqual(["Rose Jar Candle"]);
+    expect(worker.role).toBe("WORKER"); // workers have no price-bearing product list (see review-fixes.test.ts)
+    expect((await listProducts(owner, { search: "jar" })).map((x) => x.name)).toEqual(["Rose Jar Candle"]);
     const all = await listProducts(owner, { search: "jar", includeInactive: true });
     expect(all.find((x) => x.id === p.id)?.unitPrice.toString()).toBe("160");
   });

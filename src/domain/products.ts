@@ -46,7 +46,7 @@ export async function setProductActive(session: Session | null, rawInput: unknow
 }
 
 export async function listProducts(session: Session | null, rawInput: unknown = {}) {
-  requireRole(session, ["OWNER", "WORKER"]);
+  requireRole(session, ["OWNER"]); // returns prices, so workers use getStockOverview instead
   const input = parseInput(z.object({ search: z.string().trim().optional(), includeInactive: z.boolean().default(false) }), rawInput);
   return prisma.product.findMany({
     where: {

@@ -10,7 +10,9 @@ import { stateName } from "@/lib/gst";
 
 const BLANK: CustomerFormValue = { name: "", phone: "", gstin: "", billingAddress: "", stateCode: "21" };
 
-export function CustomersManager({ customers }: { customers: SavedCustomer[] }) {
+type ListedCustomer = SavedCustomer & { isActive: boolean };
+
+export function CustomersManager({ customers }: { customers: ListedCustomer[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<CustomerFormValue | null>(null);
@@ -28,11 +30,11 @@ export function CustomersManager({ customers }: { customers: SavedCustomer[] }) 
         {visible.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
-              <p className="font-medium">{c.name}</p>
+              <p className="font-medium">{c.name} {!c.isActive && <span className="text-sm text-muted-foreground">(hidden)</span>}</p>
               <p className="text-sm text-muted-foreground">{[c.phone, c.gstin ?? "Unregistered", stateName(c.stateCode)].filter(Boolean).join(" · ")}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => setEditing({ id: c.id, name: c.name, phone: c.phone ?? "", gstin: c.gstin ?? "", billingAddress: c.billingAddress, stateCode: c.stateCode })}>Edit</Button>
-            <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setCustomerActiveAction({ id: c.id, isActive: false }), { success: "Customer hidden" })) router.refresh(); }}>Hide</Button>
+            <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setCustomerActiveAction({ id: c.id, isActive: !c.isActive }), { success: c.isActive ? "Customer hidden" : "Customer restored" })) router.refresh(); }}>{c.isActive ? "Hide" : "Restore"}</Button>
           </li>
         ))}
         {visible.length === 0 && <li className="p-6 text-center text-muted-foreground">No customers found.</li>}

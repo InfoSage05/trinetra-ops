@@ -49,6 +49,12 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   const seen = new Set<string>();
   for (const row of rows) {
     const result = productSchema.safeParse(row);
+    const gst = Number(String(row.gstRate ?? "").replace(/,/g, ""));
+    if (result.success && gst > 0 && gst < 1 && gst !== 0.25) {
+      // Excel stores a %-formatted 18% cell as 0.18; importing that would charge 0.18% GST.
+      errors.push({ rowNumber: row.rowNumber, message: `GST "${row.gstRate}" looks like a fraction. Type 18 for 18% (or format the column as a plain number).` });
+      continue;
+    }
     if (!result.success) {
       errors.push({ rowNumber: row.rowNumber, message: result.error.issues[0]?.message ?? "Invalid row" });
     } else if (seen.has(result.data.sku)) {

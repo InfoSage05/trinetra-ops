@@ -54,11 +54,14 @@ export async function setCustomerActive(session: Session | null, rawInput: unkno
 
 export async function searchCustomers(session: Session | null, rawInput: unknown = {}) {
   requireRole(session, ["OWNER"]);
-  const input = parseInput(z.object({ query: z.string().trim().optional(), limit: z.number().int().min(1).max(100).default(20) }), rawInput);
+  const input = parseInput(
+    z.object({ query: z.string().trim().optional(), limit: z.number().int().min(1).max(500).default(20), includeInactive: z.boolean().default(false) }),
+    rawInput
+  );
   const q = input.query;
   return prisma.customer.findMany({
     where: {
-      isActive: true,
+      ...(input.includeInactive ? {} : { isActive: true }),
       ...(q
         ? { OR: [
             { name: { contains: q, mode: "insensitive" } },

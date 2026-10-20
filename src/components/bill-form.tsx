@@ -36,6 +36,8 @@ export function BillForm({ products, businessStateCode }: { products: BillablePr
   const [key, renewKey] = useIdempotencyKey();
   const [customer, setCustomer] = useState<SavedCustomer | null>(null);
   const [placeOfSupply, setPlaceOfSupply] = useState(businessStateCode);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>(() => [blankLine()]);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
   const [payMode, setPayMode] = useState<PayMode>("FULL");
@@ -48,6 +50,8 @@ export function BillForm({ products, businessStateCode }: { products: BillablePr
   const draft = {
     customerId: customer?.id ?? "",
     placeOfSupply,
+    ...(deliveryAddress.trim() ? { deliveryAddress: deliveryAddress.trim() } : {}),
+    ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: filledLines.map((l) => ({
       productId: l.productId, quantity: l.quantity,
       ...(l.unitPrice ? { unitPrice: l.unitPrice } : {}),
@@ -82,10 +86,18 @@ export function BillForm({ products, businessStateCode }: { products: BillablePr
     }
     const amount = payMode === "FULL" ? preview.grandTotal : payMode === "PART" ? paidAmount : "";
     setSaving(true);
-    const result = await createBillAction({
-      ...draft, idempotencyKey: key, confirmShortfall,
-      ...(amount && Number(amount) > 0 ? { initialPayment: { amount, method } } : {}),
-    });
+    let result;
+    try {
+      result = await createBillAction({
+        ...draft, idempotencyKey: key, confirmShortfall,
+        ...(amount && Number(amount) > 0 ? { initialPayment: { amount, method } } : {}),
+      });
+    } catch {
+      // The request may or may not have reached the server. The same key is reused on the next press,
+      // so pressing Save again can never create a second invoice.
+      setSaving(false);
+      return toast.error("Could not reach the server. Check the internet and press Save again. Your bill will not be duplicated.");
+    }
     setSaving(false);
     if (result.ok) {
       renewKey();
@@ -108,6 +120,14 @@ export function BillForm({ products, businessStateCode }: { products: BillablePr
         <div className="space-y-1.5">
           <Label htmlFor="pos">Goods delivered to (place of supply)</Label>
           <StateSelect id="pos" value={placeOfSupply} onChange={setPlaceOfSupply} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="delivery">Delivery address (leave empty if same as customer address)</Label>
+          <Input id="delivery" className="h-11" value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="notes">Note on the bill (optional)</Label>
+          <Input id="notes" className="h-11" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
       </CardContent></Card>
 

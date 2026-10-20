@@ -33,6 +33,7 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
   const [reason, setReason] = useState("");
   const [restock, setRestock] = useState(true);
   const [returnQty, setReturnQty] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
 
   const returned = new Map<string, number>();
   for (const note of view.creditNotes) for (const l of note.lines) returned.set(l.billLineItemId, (returned.get(l.billLineItemId) ?? 0) + Number(l.quantity));
@@ -43,13 +44,19 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
   }));
 
   async function pay() {
-    const ok = await callAction(recordPaymentAction({ billId: view.id, amount, method, idempotencyKey: payKey }), { success: "Payment recorded" });
+    if (busy) return;
+    setBusy(true);
+    const ok = await callAction(recordPaymentAction({ billId: view.id, amount, method, idempotencyKey: payKey }), { success: Number(amount) < 0 ? "Refund recorded" : "Payment recorded" });
+    setBusy(false);
     if (ok) { renewPayKey(); setPayOpen(false); router.refresh(); }
   }
 
   async function doReturn() {
+    if (busy) return;
     const lines = Object.entries(returnQty).filter(([, q]) => q && Number(q) > 0).map(([billLineItemId, quantity]) => ({ billLineItemId, quantity }));
+    setBusy(true);
     const ok = await callAction(recordReturnAction({ billId: view.id, reason, restock, lines, idempotencyKey: returnKey }), { success: "Credit note created" });
+    setBusy(false);
     if (ok) { renewReturnKey(); setReturnOpen(false); setReturnQty({}); setReason(""); router.refresh(); }
   }
 
@@ -65,6 +72,7 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
       </div>
       <div className="flex flex-wrap gap-2">
         {due.greaterThan(0) && <Button onClick={() => { setAmount(view.payment.amountDue); setPayOpen(true); }}>Record payment</Button>}
+        {due.isNegative() && <Button variant="destructive" onClick={() => { setAmount(view.payment.amountDue); setPayOpen(true); }}>Record refund ({formatINR(due.abs())})</Button>}
         <Button variant="outline" onClick={() => setReturnOpen(true)}>Return items</Button>
         <a className={linkButton()} href={`/print/bills/${view.id}?format=a4`} target="_blank" rel="noreferrer">Print A4</a>
         <a className={linkButton()} href={`/print/bills/${view.id}?format=thermal`} target="_blank" rel="noreferrer">Print receipt</a>
@@ -76,19 +84,24 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
       </div>
       {view.irp?.lastError && <p className="text-sm text-destructive">e-Invoice problem: {view.irp.lastError}</p>}
       {view.creditNotes.length > 0 && (
-        <p className="text-sm text-muted-foreground">Credit notes: {view.creditNotes.map((n) => `${n.number} (${formatINR(n.grandTotal)})`).join(", ")}</p>
+        <p className="text-sm text-muted-foreground">
+          Credit notes:{" "}
+          {view.creditNotes.map((n, i) => (
+            <span key={n.id}>{i > 0 && ", "}<a className="underline" href={`/print/credit-notes/${n.id}`} target="_blank" rel="noreferrer">{n.number}</a> ({formatINR(n.grandTotal)})</span>
+          ))}
+        </p>
       )}
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{due.isNegative() ? "Record refund to customer" : "Record payment"}</DialogTitle></DialogHeader>
           <div className="grid gap-3">
-            <div className="space-y-1"><Label>Amount (due {formatINR(view.payment.amountDue)})</Label><Input className="h-12 text-lg" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+            <div className="space-y-1"><Label>{due.isNegative() ? `Refund amount (minus sign = money given back; owed ${formatINR(due.abs())})` : `Amount (due ${formatINR(view.payment.amountDue)})`}</Label><Input className="h-12 text-lg" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
             <Select items={METHODS} value={method} onValueChange={(v) => { if (v) setMethod(v); }}>
               <SelectTrigger className="h-12 w-full"><SelectValue /></SelectTrigger>
               <SelectContent>{METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
             </Select>
-            <Button size="lg" onClick={pay}>Save payment</Button>
+            <Button size="lg" disabled={busy} onClick={pay}>{due.isNegative() ? "Save refund" : "Save payment"}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -108,7 +121,7 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
             })}
             <div className="space-y-1"><Label>Reason</Label><Input className="h-11" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. broken in transit" /></div>
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={restock} onCheckedChange={(v) => setRestock(v === true)} /> Put returned items back into stock (untick if damaged)</label>
-            <Button size="lg" onClick={doReturn}>Create credit note</Button>
+            <Button size="lg" disabled={busy} onClick={doReturn}>Create credit note</Button>
           </div>
         </DialogContent>
       </Dialog>

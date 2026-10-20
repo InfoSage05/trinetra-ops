@@ -1,11 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/session";
 import { getBusinessProfile, getNumberSeriesStatus } from "@/domain/settings";
 import { formatDocumentNumber } from "@/domain/numbering";
 import { BusinessProfileForm } from "@/components/business-profile-form";
 import { NumberSeriesCard } from "@/components/number-series-card";
 
 export default async function SettingsPage() {
+  // Bank and UPI details are owner-only; do not rely on the proxy alone.
+  if ((await getSession())?.role !== "OWNER") redirect("/dashboard");
   const [profile, series] = await Promise.all([getBusinessProfile(prisma), getNumberSeriesStatus(prisma)]);
   const rows = series.map((s) => ({
     series: s.series, financialYear: s.financialYear, prefix: s.prefix,

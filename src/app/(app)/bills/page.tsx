@@ -9,7 +9,7 @@ const STATUS_LABEL = { PAID: "Paid", PARTIAL: "Part paid", UNPAID: "Unpaid (on c
 
 export default async function BillsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const { q, status } = await searchParams;
-  const validStatus = status === "PAID" || status === "PARTIAL" || status === "UNPAID" ? status : undefined;
+  const validStatus = status === "PAID" || status === "PARTIAL" || status === "UNPAID" || status === "DUE" ? status : undefined;
   const bills = await listBills(await getSession(), { search: q || undefined, status: validStatus });
   return (
     <div className="space-y-4">
@@ -17,7 +17,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
       <form className="flex flex-wrap gap-2">
         <input name="q" defaultValue={q} placeholder="Invoice no. or customer" className="h-11 flex-1 rounded-md border bg-background px-3" />
         <select name="status" defaultValue={validStatus ?? ""} className="h-11 rounded-md border bg-background px-2">
-          <option value="">All</option><option value="UNPAID">Unpaid</option><option value="PARTIAL">Part paid</option><option value="PAID">Paid</option>
+          <option value="">All</option><option value="DUE">Money due (unpaid + part paid)</option><option value="UNPAID">Unpaid</option><option value="PARTIAL">Part paid</option><option value="PAID">Paid</option>
         </select>
         <button className="h-11 rounded-md border bg-background px-4">Search</button>
       </form>

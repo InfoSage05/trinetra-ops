@@ -17,7 +17,7 @@ export function OwnerDashboard({ data }: { data: Data }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Stat label="Today's sales" value={formatINR(data.today.salesTotal)} />
         <Stat label="Bills today" value={String(data.today.billCount)} />
-        <Stat label="Money to collect" value={formatINR(data.totalDue)} href="/bills?status=UNPAID" />
+        <Stat label="Money to collect" value={formatINR(data.totalDue)} href="/bills?status=DUE" />
       </div>
 
       {attention > 0 && (

@@ -27,14 +27,12 @@ export async function authenticate(rawPhone: string, password: string, now: Date
   }
 
   if (!(await verifyPassword(password, user.passwordHash))) {
-    const failed = user.failedLoginCount + 1;
-    const lock = failed >= MAX_FAILED_LOGINS;
-    await prisma.user.update({
-      where: { id: user.id },
-      data: lock
-        ? { failedLoginCount: 0, lockedUntil: new Date(now.getTime() + LOCKOUT_MINUTES * 60_000) }
-        : { failedLoginCount: failed },
-    });
+    // Atomic increment: parallel guesses must each be counted, or the lockout can be outrun.
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: { increment: 1 } } });
+    const lock = updated.failedLoginCount >= MAX_FAILED_LOGINS;
+    if (lock) {
+      await prisma.user.update({ where: { id: user.id }, data: { lockedUntil: new Date(now.getTime() + LOCKOUT_MINUTES * 60_000) } });
+    }
     return { ok: false, error: lock ? `Too many wrong attempts. Try again in ${LOCKOUT_MINUTES} minute(s).` : GENERIC_ERROR };
   }
 
