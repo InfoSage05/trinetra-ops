@@ -1,5 +1,12 @@
-# Trinetra Candles — Full Context + Phase 1 Plan (Review Copy)
+# Trinetra Candles — Full Context + Phase 1 Plan (Review Copy, Historical)
 
+> **Superseded as the implementation source by
+> `2026-10-20-phase1-inventory-billing-design.md` (v2, consolidated).** This document is kept as
+> the historical record of the full business context and the review process (three initial
+> review agents plus an external Codex audit that corrected several of their resolutions). Read
+> the v2 design doc for the current, authoritative Phase 1 spec; read this one for *why* it ended
+> up that way.
+>
 > This document is self-contained. It exists so an independent reviewer can evaluate the plan
 > without needing any prior conversation history. It covers: who this is for, the real-world
 > problem, the full multi-phase product vision, the scope decisions made for Phase 1, and the
@@ -280,8 +287,8 @@ documents a simple manual fallback so an outage never means "cannot bill anyone"
 Worker-role users never see pricing, billing, or customer financial screens.
 
 ### Error Handling
-- Bill finalization is atomic — invoice numbering, tax computation, and ledger writes succeed or
-  fail together.
+- Database posting is atomic — invoice payload, tax snapshots, dispatched-stock movements, and
+  durable IRP job succeed or fail together. IRP submission has a separate retryable lifecycle.
 - Every ledger-mutating action requires a reason/reference.
 - Server-side role checks gate every mutating action regardless of UI.
 
@@ -289,12 +296,13 @@ Worker-role users never see pricing, billing, or customer financial screens.
 Given a single-developer-maintained small-scale app, automated tests focus narrowly on the places
 a bug causes real damage:
 - **Stock ledger math** — current stock always equals the correct sum of ledger entries.
-- **Billing transaction** — a finalized bill always produces exactly one correct ledger entry per
-  line item, correct tax computation, correctly incremented invoice number, and never partially
-  commits on failure.
-- **Concurrent invoice finalization** — two simultaneous finalize calls never produce a duplicate
-  or skipped invoice number (added during review; this is exactly the scenario the `SEQUENCE`
-  mechanism exists to handle, so it needs a test, not just an assumption).
+- **Billing transaction** — a finalized dispatch posts exactly one correct stock movement per
+  dispatched line, with correct tax computation and no partial database commit on failure.
+- **Invoice numbering and retries** — concurrent allocations never duplicate a serial; test
+  rollback behavior, void retention, idempotent retry, fiscal-year boundary, and the 16-character
+  limit. Do not assert gaplessness unless the selected serialized-counter design promises it.
+- **IRP recovery** — test accepted response, rejection, timeout after acceptance, duplicate retry,
+  and operator reconciliation without duplicate invoice or stock posting.
 - **GST split and rounding edge cases** — line-level CGST/SGST/IGST amounts always sum correctly
   to the bill-level tax total, including rounding (added during review).
 The rest of the UI relies on manual click-through testing.
