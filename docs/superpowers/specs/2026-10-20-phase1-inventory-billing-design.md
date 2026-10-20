@@ -51,11 +51,15 @@ above.
 | Scale | Small: dozens of SKUs, under 50 bills/day even at peak |
 | User roles | Separate logins, role-based: **owner** (father — full access, billing, financials) and **worker** (production entry, stock viewing only; no pricing/financials, no billing) |
 | Invoice type | Full GST tax invoice: GSTIN, HSN codes, CGST/SGST/IGST breakup, sequential invoice numbering |
-| Payment tracking | Yes — paid / partial / credit per bill, with outstanding dues trackable per customer |
+| E-invoicing (IRN/QR) | In scope — business turnover is above the GST e-invoicing threshold, so every invoice needs a government-issued IRN + QR code via the IRP |
+| Invoice numbering scheme | Postgres `SEQUENCE`, reset per financial year (e.g. `INV/2026-27/00001`) — avoids deriving the next number from `MAX(invoice_number)`, which races under concurrent finalize calls |
+| Payment tracking | Yes — paid / partial / credit per bill, via an append-only payment log (not a single mutable field), with outstanding dues trackable per customer |
 | Inventory scope | Finished goods only (no raw materials / BOM in Phase 1) |
 | Bill output | Both printed (thermal/A4) and digital (PDF, shareable) |
 | Rollout | Parallel run alongside HDPOS first, before full cutover |
-| Overselling behavior | Warn, but allow override — not hard-blocked |
+| Overselling behavior | Warn, but allow override — not hard-blocked; a minimal "units still owed" shortfall note is captured on the line item |
+| Peak-season billing | Owner-only in Phase 1 (no worker-drafted bills); revisit only if real usage shows a bottleneck |
+| Outage fallback | Documented manual paper-based fallback procedure (no code) for connectivity loss during Diwali/Puja |
 
 ## 4. Architecture
 
@@ -92,20 +96,45 @@ without rework.
 action, not just hidden in the UI — a worker cannot invoke billing/financial logic even by
 guessing a URL or API call.
 
+**Idempotent, attributable writes (added during review):** Every ledger-style write carries a
+nullable, uniquely-indexed `idempotency_key` and a nullable `actor_type` (`human` | `agent`) +
+`source_metadata` (jsonb). Phase 1 never populates these, but they exist from day one so a
+retried/duplicate call from a future LLM-driven caller can be deduped, and an agent-authored
+entry stays distinguishable from a human one.
+
+**Preview-before-commit, caller-controlled transactions (added during review):**
+`createBill()`, `recordProduction()`, and `adjustStock()` each support a dry-run mode that
+returns the computed effect without committing, and none of them open their own database
+transaction — callers control the transaction boundary. This is what makes "LLM proposes, human
+reviews, then commits" and "batch-reconcile an Excel sheet as one transaction" buildable later
+without duplicating or reworking this logic.
+
 ## 5. Data Model
 
 - **`users`** — id, name, email, password_hash, role (`owner` | `worker`), created_at
-- **`customers`** — id, name, phone, address, state (for tax jurisdiction), gstin (nullable, for
-  B2B customers)
+- **`business_profile`** — single-row settings: legal name, GSTIN, home state code, address.
+  Needed to determine CGST+SGST vs IGST (requires comparing the business's own state to the
+  customer's).
+- **`customers`** — id, name, phone, address, state (a controlled GST state code, not free
+  text), gstin (nullable, for B2B customers)
 - **`products`** — id, name, sku, unit (e.g. "piece", "box"), hsn_code, unit_price, gst_rate
 - **`stock_ledger`** — id, product_id, quantity_delta (+/-), type (`produced` | `billed` |
   `adjustment`), reference_bill_id (nullable), reason (required for `adjustment`), created_by
-  (user id), created_at
+  (user id), idempotency_key (nullable, unique), actor_type (`human` | `agent`, default
+  `human`), source_metadata (jsonb, nullable), created_at
   - Current stock for a product = `SUM(quantity_delta) WHERE product_id = X`
-- **`bills`** — id, invoice_number (sequential, unique), customer_id, bill_date, subtotal,
-  tax_total, grand_total, payment_status (`paid` | `partial` | `credit`), amount_paid,
-  amount_due, created_by, created_at
-- **`bill_line_items`** — id, bill_id, product_id, quantity, unit_price, tax_rate, line_total
+- **`bills`** — id, invoice_number (from a per-financial-year `SEQUENCE`, unique), customer_id,
+  bill_date, subtotal, cgst_total, sgst_total, igst_total, discount_total (nullable),
+  round_off (nullable), tax_total, grand_total, place_of_supply (state code),
+  reverse_charge_applicable (boolean, default false), irn (nullable), qr_code_data (nullable),
+  payment_status (`paid` | `partial` | `credit`, computed from `payment_log`), amount_due
+  (computed), created_by, idempotency_key (nullable, unique), actor_type, source_metadata
+  (jsonb, nullable), created_at
+- **`bill_line_items`** — id, bill_id, product_id, quantity, unit_price, tax_rate, cgst_amount,
+  sgst_amount, igst_amount, line_total, shortfall_quantity (nullable), shortfall_note (nullable)
+- **`payment_log`** — id, bill_id, amount, method, paid_at, recorded_by, note (nullable).
+  `bills.amount_paid`/`amount_due`/`payment_status` are computed from this log, the same way
+  stock is computed from `stock_ledger`.
 
 ## 6. Core Flow: Billing with Live Stock + Auto-Deduction
 
@@ -115,27 +144,59 @@ guessing a URL or API call.
 3. If the entered quantity exceeds available stock, the UI shows an inline warning (e.g. "Only 8
    available, you entered 10") but does not block entry — matches the agreed "warn, don't block"
    behavior.
-4. On **Finalize Bill**, a single database transaction:
-   - Assigns the next sequential invoice number.
-   - Computes tax per line (CGST+SGST if customer state matches business state, else IGST).
+4. If a line is oversold, the father can still proceed after confirming, but the shortfall
+   (e.g. "2 units still owed") is captured on that line item rather than disappearing silently.
+5. On **Finalize Bill**, a single database transaction:
+   - Pulls the next invoice number from a per-financial-year `SEQUENCE` (not `MAX()+1`, which
+     races under concurrent finalize calls).
+   - Computes and *stores* the CGST/SGST/IGST split per line (CGST+SGST if customer state
+     matches the business's own state from `business_profile`, else IGST).
+   - Generates the IRN + QR code via the government IRP (required — turnover is above the
+     e-invoicing threshold).
    - Records payment status and amount due.
    - Writes one negative `stock_ledger` entry per line item, type `billed`, linked to the bill.
-   - If any step fails, nothing is partially saved.
-5. Because "current stock" is computed live from the ledger, the updated number is immediately
+   - If any step fails, nothing is partially saved — including the invoice number, since the
+     sequence advance and the bill row share the same transaction.
+6. Because "current stock" is computed live from the ledger, the updated number is immediately
    visible to any other logged-in user, on any device, with no caching or sync step.
 
 **Production entry (stock increase):** A simple form ("Produced 200 units of Lavender Jar
 Candle") creates a positive `stock_ledger` entry, type `produced`. Available to both owner and
-worker roles.
+worker roles. This does not check raw-material availability — the UI should say so explicitly.
 
 **Manual correction:** Any direct stock correction (miscount, damage) goes through the same
 ledger as an `adjustment` entry and **requires** a reason note — there is no way to silently
 change a stock number.
 
+**Negative-stock surfacing:** Because overselling is allowed, computed stock can go negative.
+The dashboard shows a visible indicator for any product at or below zero, so this doesn't
+quietly reintroduce the "nobody notices the discrepancy" failure mode the project exists to fix.
+
 Concurrency note: because overselling is allowed-with-warning rather than hard-blocked, Phase 1
 does not need locking/reservation logic to prevent two simultaneous bills from both reading the
 same "last few units available" — brief staleness between read and finalize is an accepted,
-visible, correctable edge case, not a correctness bug.
+visible, correctable edge case, not a correctness bug. Invoice numbering is the one place that
+*does* need an explicit concurrency-safe mechanism (the `SEQUENCE` above), since a collision
+there is a rejected/crashed finalize on the legally-sensitive invoicing path, not a harmless
+stale read.
+
+### GST Compliance Details (added during review)
+
+- Tax breakup (CGST/SGST/IGST) is persisted per line, not just computed at display time, so a
+  reprinted invoice always matches the original.
+- Place of supply and reverse-charge applicability are explicit, mandatory fields.
+- Discount and round-off are explicit fields, not folded opaquely into totals.
+- E-invoicing (IRN + QR) integration with the government IRP is in scope, given confirmed
+  turnover above the threshold — budget this as real scope, not a schema tweak.
+- Invoice numbering resets per financial year via a `SEQUENCE` (CGST Rule 46 practice).
+
+### Outage Fallback Procedure (added during review)
+
+Full offline support stays out of scope, but Diwali/Puja is both the highest-stakes and the
+likeliest-for-outage period. Fallback (no code): keep a pre-printed paper duplicate book at the
+billing counter; if the system is unreachable, bill by hand on paper as usual; once connectivity
+returns, enter each paper bill into the system as a normal bill, noting the original paper slip
+number for reference.
 
 ## 7. Screens (Phase 1)
 
@@ -165,12 +226,16 @@ nothing involving pricing, billing, or customer financials.
 ## 9. Testing Approach
 
 Given this is a solo-maintained small-scale application, automated testing is focused narrowly
-on the two places a bug causes real damage:
+on the places a bug causes real damage:
 - **Stock ledger math** — current stock always equals the correct sum of ledger entries under
   concurrent writes.
 - **Billing transaction** — a finalized bill always produces exactly one correct ledger entry
   per line item, correct tax computation, and a correctly incremented invoice number, and never
   partially commits on failure.
+- **Concurrent invoice finalization** — two simultaneous finalize calls never produce a
+  duplicate or skipped invoice number (added during review).
+- **GST split and rounding edge cases** — per-line CGST/SGST/IGST amounts always sum correctly
+  to the bill-level tax total (added during review).
 
 The rest of the UI is validated through manual click-through testing rather than broad automated
 UI test coverage, matching the scale of the team maintaining this.
@@ -179,7 +244,10 @@ UI test coverage, matching the scale of the team maintaining this.
 
 - Raw material / bill-of-materials (BOM) tracking.
 - LLM-assisted Excel parsing and voice-to-order capture (Phase 2).
-- Pending orders / reminders dashboard (Phase 3).
-- Reporting/analytics, offline support, and festive-season load hardening (Phase 4).
+- Full pending-orders / reminders dashboard (Phase 3) — Phase 1 only captures a minimal
+  per-line shortfall note as a stopgap.
+- Worker-drafted bills requiring owner approval (billing stays owner-only; revisit if needed).
+- Reporting/analytics and festive-season infrastructure load hardening (Phase 4).
+- Full offline support (mitigated instead by the documented manual fallback procedure above).
 - Hard-blocking overselling (deferred — current behavior is warn-and-allow; revisit if real-world
   use shows this causes problems).
