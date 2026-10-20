@@ -1,0 +1,74 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { approveStockCountAction, discardStockCountAction, submitStockCountAction } from "@/actions/inventory";
+import { callAction } from "@/lib/client/call-action";
+import { formatQuantity } from "@/lib/money";
+import { formatDateIN } from "@/lib/time";
+
+type Item = { id: string; name: string; sku: string };
+type Pending = { id: string; productName: string; countedQuantity: string; expectedQuantity: string; delta: string; countedAt: Date; movementsSinceCount: number; note: string | null };
+
+export function CountsManager({ items, pending, isOwner }: { items: Item[]; pending: Pending[]; isOwner: boolean }) {
+  const router = useRouter();
+  const [productId, setProductId] = useState("");
+  const [counted, setCounted] = useState("");
+  const [note, setNote] = useState("");
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (await callAction(submitStockCountAction({ productId, countedQuantity: counted, note }), { success: isOwner ? "Count saved. Approve it below." : "Count sent to the owner" })) {
+      setCounted(""); setNote(""); router.refresh();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-xl font-semibold">Count stock</h1>
+      <Card>
+        <CardHeader><CardTitle>Enter what you physically counted</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="grid gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="item">Item</Label>
+              <select id="item" className="h-12 w-full rounded-md border bg-background px-3" value={productId} onChange={(e) => setProductId(e.target.value)} required>
+                <option value="">Choose item…</option>
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.sku})</option>)}
+              </select>
+            </div>
+            <div className="space-y-1"><Label htmlFor="counted">Counted quantity</Label><Input id="counted" className="h-14 text-2xl" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} required /></div>
+            <div className="space-y-1"><Label htmlFor="note">Note (optional)</Label><Input id="note" className="h-11" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+            <Button type="submit" size="lg" className="h-12">Save count</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {isOwner && (
+        <Card>
+          <CardHeader><CardTitle>Waiting for your approval ({pending.length})</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {pending.map((c) => (
+              <div key={c.id} className="rounded-md border p-3">
+                <p className="font-medium">{c.productName}</p>
+                <p className="text-sm">Counted {formatQuantity(c.countedQuantity)}, system showed {formatQuantity(c.expectedQuantity)}: change <b>{Number(c.delta) > 0 ? "+" : ""}{formatQuantity(c.delta)}</b> · {formatDateIN(new Date(c.countedAt))}</p>
+                {c.note && <p className="text-sm text-muted-foreground">“{c.note}”</p>}
+                {c.movementsSinceCount > 0 && (
+                  <p className="text-sm text-amber-700">{c.movementsSinceCount} stock change(s) were recorded after this count. Approving applies only the difference found when counting.</p>
+                )}
+                <div className="mt-2 flex gap-2">
+                  <Button onClick={async () => { if (await callAction(approveStockCountAction({ stockCountId: c.id }), { success: "Stock updated" })) router.refresh(); }}>Approve</Button>
+                  <Button variant="outline" onClick={async () => { if (await callAction(discardStockCountAction({ stockCountId: c.id }), { success: "Count discarded" })) router.refresh(); }}>Discard</Button>
+                </div>
+              </div>
+            ))}
+            {pending.length === 0 && <p className="text-muted-foreground">Nothing waiting.</p>}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
