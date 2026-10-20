@@ -16,7 +16,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "user:reset-password": "tsx scripts/reset-owner-password.ts"
+    "user:reset-password": "tsx scripts/reset-owner-password.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
