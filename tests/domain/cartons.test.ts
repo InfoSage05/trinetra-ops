@@ -152,3 +152,17 @@ describe("re-importing a price list", () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: p.id } })).qtyPerCarton).toBe(30);
   });
 });
+
+describe("most items on one bill", () => {
+  it("allows 50 items and refuses 51", async () => {
+    await makeBusinessProfile();
+    await makeSeries("INVOICE");
+    const owner = await makeUser("OWNER");
+    const customer = await makeCustomer();
+    const products = await Promise.all(Array.from({ length: 51 }, (_, i) => makeProduct({ name: `Item ${i + 1}`, sku: `ITEM-${i + 1}` })));
+    const lines = (n: number) => products.slice(0, n).map((p) => ({ productId: p.id, quantity: "1" }));
+    await expect(previewBill(owner, { customerId: customer.id, placeOfSupply: "21", lines: lines(51) })).rejects.toThrow(/at most 50 items/);
+    const preview = await previewBill(owner, { customerId: customer.id, placeOfSupply: "21", lines: lines(50) });
+    expect(preview.lines).toHaveLength(50);
+  });
+});

@@ -40,7 +40,7 @@ test("owner makes a bill in the Excel-sheet layout using only the keyboard, and 
   await expect(rows.nth(1).getByLabel("Item")).toBeFocused();
 
   // The stock check follows the row and the server fills in the money columns.
-  await expect(page.getByTestId("stock-panel")).toContainText("E2E Sheet Candle");
+  await expect(page.getByTestId("stock-bar")).toContainText("E2E Sheet Candle");
   await expect(rows.nth(0).getByTestId("sheet-line-total")).not.toHaveText("");
   await page.getByLabel("Freight charges").fill("50");
   await expect(page.getByTestId("sheet-grand-total")).not.toHaveText("");
@@ -83,4 +83,45 @@ test("owner sets how many pieces make one carton, right on the stock list", asyn
   await row.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Saved: 1 carton = 12 pcs")).toBeVisible();
   await expect(row).toContainText("4 cartons + 2 pcs (50 pcs)");
+});
+
+test("the sheet fits the screen without sideways scrolling, can be resized, and grows up to 50 rows", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Excel sheet" }).click();
+  const frame = page.getByTestId("bill-sheet");
+  await expect(frame).toBeVisible();
+
+  // Fit to screen is on by itself: the whole width is visible.
+  await page.getByRole("button", { name: "Fit to screen" }).click();
+  const fits = await frame.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+  expect(fits).toBe(true);
+
+  // Bigger / smaller.
+  const before = Number((await page.getByTestId("sheet-zoom").innerText()).replace("%", ""));
+  await page.getByRole("button", { name: "Make the sheet bigger" }).click();
+  await expect(page.getByTestId("sheet-zoom")).toHaveText(`${before + 10}%`);
+  await page.getByRole("button", { name: "Make the sheet smaller" }).click();
+  await page.getByRole("button", { name: "Make the sheet smaller" }).click();
+  await expect(page.getByTestId("sheet-zoom")).toHaveText(`${before - 10}%`);
+
+  // More rows, but never past the limit of 50 items.
+  await expect(page.getByTestId("sheet-row")).toHaveCount(12);
+  for (let i = 0; i < 9; i++) {
+    const more = page.getByRole("button", { name: "Show more rows" });
+    if (await more.isDisabled()) break;
+    await more.click();
+  }
+  await expect(page.getByTestId("sheet-row")).toHaveCount(50);
+  await expect(page.getByRole("button", { name: "Show more rows" })).toBeDisabled();
+
+  // The choice is remembered, and the cards layout stops at 50 too.
+  await page.reload();
+  await expect(page.getByTestId("sheet-row")).toHaveCount(50);
+  await page.getByRole("button", { name: "Show fewer rows" }).click();
+  await expect(page.getByTestId("sheet-row")).toHaveCount(45);
+  await page.getByRole("button", { name: "Fit to screen" }).click();
+  await page.getByRole("button", { name: "Cards" }).click();
 });

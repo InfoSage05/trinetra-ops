@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "@/lib/db";
-import { createProduct, quickEditProduct, renameProduct, setCartonSize, updateProduct } from "@/domain/products";
+import { createProduct, quickEditProduct, setAllGstRate, renameProduct, setCartonSize, updateProduct } from "@/domain/products";
 import { importProducts } from "@/domain/imports";
 import { importOpeningStock, previewOpeningStock, getCurrentStock } from "@/domain/stock";
 import { createBill } from "@/domain/billing";
@@ -93,5 +93,23 @@ describe("items without a code", () => {
     await expect(quickEditProduct(owner, { id: item.id })).rejects.toThrow();
     await expect(quickEditProduct(owner, { id: item.id, unitPrice: "-5" })).rejects.toThrow();
     await expect(quickEditProduct(worker, { id: item.id, unitPrice: "9" })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("GST can be set to the same rate on every active item at once, by the owner only", async () => {
+    const owner = await makeUser("OWNER");
+    const worker = await makeUser("WORKER");
+    const a = await createProduct(owner, { ...base, name: "Item A", gstRate: "18" });
+    const b = await createProduct(owner, { ...base, name: "Item B", gstRate: "12" });
+    await createProduct(owner, { ...base, name: "Item C", gstRate: "5" });
+    const off = await createProduct(owner, { ...base, name: "Old item", gstRate: "18" });
+    await prisma.product.update({ where: { id: off.id }, data: { isActive: false } });
+
+    expect(await setAllGstRate(owner, { gstRate: "5" })).toEqual({ changed: 2, gstRate: "5.00" });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: a.id } })).gstRate.toString()).toBe("5");
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: b.id } })).gstRate.toString()).toBe("5");
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: off.id } })).gstRate.toString()).toBe("18"); // inactive items are left alone
+    expect((await setAllGstRate(owner, { gstRate: "5" })).changed).toBe(0);
+    await expect(setAllGstRate(owner, { gstRate: "99" })).rejects.toThrow();
+    await expect(setAllGstRate(worker, { gstRate: "5" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

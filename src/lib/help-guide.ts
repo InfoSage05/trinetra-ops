@@ -42,7 +42,7 @@ export const GUIDE_TASKS: GuideTask[] = [
   { keywords: ["rename", "name", "change name", "naam"], title: "Change the name of an item",
     steps: ["Open Products and press Rates and names, then edit the name and press Save.", "Or open the item from Stock and press Rename."], pages: ["/products", "/inventory"] },
   { keywords: ["gst", "tax", "hsn"], title: "See or set GST",
-    steps: ["On New bill, the GST rate shows for every item and in the box 'GST rates on this bill'.", "To change an item's GST rate, open Products, press Edit on the item, change GST % and Save. Ask your CA for the right rate."], pages: ["/billing/new", "/products"] },
+    steps: ["On New bill, the GST rate shows for every item and in the box 'GST rates on this bill'.", "To change one item's GST rate, open Products, press Edit on the item, change GST % and Save.", "To give every item the same GST rate, open Products and press Set GST for all items. Ask your CA for the right rate."], pages: ["/billing/new", "/products"] },
   { keywords: ["order", "orders", "customer order"], title: "Add a customer order",
     steps: ["Open Orders and press + New order.", "Type or say the order, upload a photo, or fill it by hand.", "Check it, then press Save order. Later press 'Create bill from this order'."], pages: ["/orders/new", "/orders"] },
   { keywords: ["photo", "image", "picture", "insert image", "camera"], title: "Make an order from a photo",

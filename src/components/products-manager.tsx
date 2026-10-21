@@ -1,18 +1,19 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
 import { RatesTable } from "@/components/rates-table";
-import { createProductAction, importProductsAction, setProductActiveAction, updateProductAction } from "@/actions/products";
+import { createProductAction, importProductsAction, setAllGstRateAction, setProductActiveAction, updateProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
 
 type Product = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
-const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", gstRate: "", reorderLevel: "0" };
+const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", gstRate: "5", reorderLevel: "0" };
 type Editing = typeof EMPTY & { id?: string };
 type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate: number; toUpdate: number; created: number; updated: number };
 
@@ -20,6 +21,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"items" | "rates">("items");
+  const [gstAll, setGstAll] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -49,6 +51,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">Products</h1>
+        <Button variant="outline" onClick={() => setGstAll("5")}>Set GST for all items</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}>Import from Excel</Button>
         <Button onClick={() => setEditing({ ...EMPTY })}>Add product</Button>
       </div>
@@ -90,6 +93,20 @@ export function ProductsManager({ products }: { products: Product[] }) {
               <Button className="sm:col-span-2" size="lg" onClick={save}>Save</Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={gstAll !== null} onOpenChange={(open) => { if (!open) setGstAll(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Set GST for all items</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Field id="gst-all" label="GST % for every item" inputMode="decimal" value={gstAll ?? ""} onChange={(e) => setGstAll(e.target.value)} hint="Confirm the right rate with your CA" />
+            <p className="text-sm text-muted-foreground">This changes all active items. New bills use it; bills already made keep the rate they were printed with. You can still change one item later.</p>
+            <Button size="lg" className="w-full" onClick={async () => {
+              const done = await callAction(setAllGstRateAction({ gstRate: gstAll }));
+              if (done) { toast.success(done.changed === 0 ? `Every item already has ${done.gstRate}% GST` : `GST set to ${done.gstRate}% on ${done.changed} item(s)`); setGstAll(null); router.refresh(); }
+            }}>Change GST for all items</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

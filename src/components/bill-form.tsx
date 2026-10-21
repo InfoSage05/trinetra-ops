@@ -23,6 +23,8 @@ import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { useBillLayout } from "@/lib/client/use-bill-layout";
+import { useSheetPrefs } from "@/lib/client/use-sheet-prefs";
+import { MAX_BILL_ITEMS } from "@/lib/limits";
 import { splitCartons } from "@/lib/cartons";
 import { D, amountInWords, formatINR, formatQuantity } from "@/lib/money";
 
@@ -56,6 +58,9 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   });
   const [charges, setCharges] = useState<Charges>({ CARTON: "", CRATE: "", FREIGHT: "" });
   const [layout, setLayout] = useBillLayout();
+  const [sheetPrefs, setSheetPrefs] = useSheetPrefs();
+  // The full-width sheet needs the whole row, so the side stock panel gives way to the one-line stock bar.
+  const sideStock = layout === "cards" || !sheetPrefs.wide;
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
   const [payMode, setPayMode] = useState<PayMode>("FULL");
@@ -101,13 +106,15 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
 
   const update = (rowId: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.rowId === rowId ? { ...l, ...patch } : l)));
   // The sheet addresses rows by position; a row that does not exist yet is created when it is first typed in.
-  const editAt = (index: number, patch: Partial<Line>) =>
+  const editAt = (index: number, patch: Partial<Line>) => {
+    if (index >= MAX_BILL_ITEMS) return toast.error(`A bill can have at most ${MAX_BILL_ITEMS} items. Make a second bill for the rest.`);
     setLines((ls) => {
       const next = [...ls];
       while (next.length <= index) next.push(blankLine());
       next[index] = { ...next[index], ...patch };
       return next;
     });
+  };
   const clearAt = (index: number) => setLines((ls) => (ls.length <= 1 ? [blankLine()] : ls.filter((_, i) => i !== index)));
 
   // The stock panel follows the line being worked on, falling back to the last line that has an item.
@@ -161,7 +168,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
         </div>
       </div>
       {order && <p className="mb-4 rounded-md bg-muted p-2 text-sm">Billing a pending order. The items below are what is still to be delivered. Change them if you are sending less.</p>}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className={`grid gap-4 ${sideStock ? "lg:grid-cols-[minmax(0,1fr)_20rem]" : "grid-cols-[minmax(0,1fr)]"}`}>
         <div className="space-y-4">
           <Card><CardContent className="space-y-3 pt-6">
             <Label>Name of the purchaser</Label>
@@ -187,6 +194,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             <BillSheet
               products={products} lines={lines} filledLines={filledLines} preview={preview}
               charges={charges} onCharges={setCharges} onEdit={editAt} onClear={clearAt} onActivate={setActiveIndex}
+              prefs={sheetPrefs} onPrefs={setSheetPrefs}
             />
           ) : (
             <>
@@ -224,7 +232,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
               </Card>
             );
           })}
-          <Button variant="outline" className="h-12 w-full" onClick={() => setLines([...lines, blankLine()])}>+ Add another item</Button>
+          <Button variant="outline" className="h-12 w-full" disabled={lines.length >= MAX_BILL_ITEMS} onClick={() => setLines([...lines, blankLine()])}>{lines.length >= MAX_BILL_ITEMS ? `Most items on one bill reached (${MAX_BILL_ITEMS})` : "+ Add another item"}</Button>
             </>
           )}
 
@@ -285,13 +293,13 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
         </div>
 
         {/* Stock check: a sticky card beside the form on a laptop; on a phone a slim bar sits above the Save button. */}
-        <aside className="hidden lg:sticky lg:top-4 lg:block lg:self-start">
+        <aside className={sideStock ? "hidden lg:sticky lg:top-4 lg:block lg:self-start" : "hidden"}>
           <StockPanel product={activeProduct} availableNow={stockNow} takingNow={takingNow} others={products} />
         </aside>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t bg-background p-3">
-        <div className="mx-auto max-w-5xl lg:hidden"><StockBar product={activeProduct} availableNow={stockNow} takingNow={takingNow} /></div>
+        <div className={`mx-auto max-w-5xl ${sideStock ? "lg:hidden" : ""}`}><StockBar product={activeProduct} availableNow={stockNow} takingNow={takingNow} /></div>
         <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl text-lg" disabled={saving} onClick={() => save(false)}>
           {saving ? "Saving…" : preview ? `Save bill · ${formatINR(preview.grandTotal)}` : "Save bill"}
         </Button>

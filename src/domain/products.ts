@@ -101,6 +101,17 @@ export async function quickEditProduct(session: Session | null, rawInput: unknow
   });
 }
 
+/**
+ * Sets the same GST rate on every active item at once (for example 5%). Only new bills use it; bills already made keep
+ * the rate they were printed with. Returns how many items changed.
+ */
+export async function setAllGstRate(session: Session | null, rawInput: unknown) {
+  requireRole(session, ["OWNER"]);
+  const { gstRate: rate } = parseInput(z.object({ gstRate }), rawInput);
+  const result = await prisma.product.updateMany({ where: { isActive: true, NOT: { gstRate: toFixed2(rate) } }, data: { gstRate: toFixed2(rate) } });
+  return { changed: result.count, gstRate: toFixed2(rate) };
+}
+
 export async function setProductActive(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(z.object({ id: entityId, isActive: z.boolean() }), rawInput);

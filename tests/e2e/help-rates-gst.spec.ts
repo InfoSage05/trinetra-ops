@@ -74,3 +74,14 @@ test("the order screen offers Insert images (or says why photo reading is off)",
   // The test server has no vision model, so it explains instead of showing a broken button.
   await expect(page.getByText("Photo reading is not switched on yet")).toBeVisible();
 });
+
+test("owner can set the same GST rate on every item from Products", async ({ page }) => {
+  await login(page, E2E_OWNER);
+  await page.goto("/products");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Set GST for all items" }).click();
+  await expect(page.getByLabel("GST % for every item")).toHaveValue("5");
+  await page.getByRole("button", { name: "Change GST for all items" }).click();
+  await expect(page.getByText(/GST set to 5.00% on \d+ item|already has 5.00% GST/)).toBeVisible();
+  await expect(page.getByText("GST 18%")).toHaveCount(0);
+});

@@ -24,7 +24,7 @@ async function seedOwner() {
 /**
  * The factory's own item and customer names (from "Order 2026.xlsx"), added only when missing, so it is safe to run
  * again and never overwrites a name, price or carton size the owner has since changed.
- * Placeholders: price 0 ("Price not set" shows in Products), HSN 3406 (candles) and GST 18%, one piece per carton.
+ * Placeholders: price 0 ("Price not set" shows in Products), HSN 3406 (candles) and GST 5%, one piece per carton.
  * The owner/CA must set the real price, GST rate and carton size per item.
  */
 async function seedCatalogue() {
@@ -34,7 +34,7 @@ async function seedCatalogue() {
   const haveProducts = new Set((await prisma.product.findMany({ select: { name: true } })).map((p) => p.name.toLowerCase()));
   const newProducts = products.filter((n) => !haveProducts.has(n.toLowerCase()));
   if (newProducts.length > 0) {
-    await prisma.product.createMany({ data: newProducts.map((name) => ({ name, hsnCode: "3406", unitPrice: "0.00", gstRate: "18.00" })) });
+    await prisma.product.createMany({ data: newProducts.map((name) => ({ name, hsnCode: "3406", unitPrice: "0.00", gstRate: "5.00" })) });
   }
 
   const haveCustomers = new Set((await prisma.customer.findMany({ select: { name: true } })).map((c) => c.name.toLowerCase()));

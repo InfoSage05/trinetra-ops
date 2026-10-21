@@ -6,6 +6,7 @@ import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { stateName } from "@/lib/gst";
 import { D, ZERO, toFixed2 } from "@/lib/money";
+import { MAX_BILL_ITEMS } from "@/lib/limits";
 import { financialYearOf } from "@/lib/time";
 import {
   entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveMoney, quantity, stateCode,
@@ -56,7 +57,7 @@ export const billDraftSchema = z.object({
   placeOfSupply: stateCode,
   deliveryAddress: optionalText(300),
   notes: optionalText(500),
-  lines: z.array(billLineSchema).min(1, "Add at least one item.").max(100, "A bill can have at most 100 lines."),
+  lines: z.array(billLineSchema).min(1, "Add at least one item.").max(MAX_BILL_ITEMS, `A bill can have at most ${MAX_BILL_ITEMS} items. Make a second bill for the rest.`),
   charges: z
     .array(billChargeSchema)
     .max(10)

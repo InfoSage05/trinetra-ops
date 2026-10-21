@@ -1,10 +1,13 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
 import { CHARGE_FIELDS, linePieces, type Charges, type Line } from "@/components/bill-lines";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { D, amountInWords, formatAmount, formatQuantity } from "@/lib/money";
+import { MAX_BILL_ITEMS } from "@/lib/limits";
+import { MAX_ZOOM, MIN_ZOOM, type SheetPrefs } from "@/lib/client/use-sheet-prefs";
 
 /**
  * The bill as a spreadsheet, laid out like the owner's Excel template. Keyboard works like Excel:
@@ -22,9 +25,11 @@ type Props = {
   onEdit: (index: number, patch: Partial<Line>) => void;
   onClear: (index: number) => void;
   onActivate: (index: number) => void;
+  prefs: SheetPrefs;
+  onPrefs: (change: Partial<SheetPrefs>) => void;
 };
 
-const MIN_ROWS = 12;
+const NATURAL_WIDTH = 980; // the table is laid out this wide before zooming
 const COL = { item: 0, cartons: 1, pieces: 2, rate: 3, discount: 4 } as const;
 const th = "border border-neutral-400 bg-neutral-100 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight";
 const td = "border border-neutral-300 px-1 py-0 align-middle";
@@ -82,7 +87,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
           }
         }}
       />
-      {matches.length > 0 && box && (
+      {matches.length > 0 && box && createPortal(
         <ul role="listbox" className="fixed z-50 max-h-64 overflow-auto rounded-md border bg-background text-sm shadow-lg" style={{ left: box.left, top: box.top, width: box.width }}>
           {matches.map((p, i) => (
             <li
@@ -94,15 +99,31 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
               <span className="whitespace-nowrap text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
     </>
   );
 }
 
-export function BillSheet({ products, lines, filledLines, preview, charges, onCharges, onEdit, onClear, onActivate }: Props) {
+export function BillSheet({ products, lines, filledLines, preview, charges, onCharges, onEdit, onClear, onActivate, prefs, onPrefs }: Props) {
   const tableRef = useRef<HTMLTableElement>(null);
-  const rowCount = Math.max(MIN_ROWS, lines.length + 1);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [fitZoom, setFitZoom] = useState(100);
+  const rowCount = Math.min(MAX_BILL_ITEMS, Math.max(prefs.rows, lines.length + 1));
+
+  // "Fit" mode: scale the sheet so its whole width is on screen, so nobody has to scroll sideways.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => setFitZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.floor((frame.clientWidth / NATURAL_WIDTH) * 100))));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [prefs.wide]);
+  const zoom = prefs.zoom === 0 ? fitZoom : prefs.zoom;
+  const setZoom = (value: number) => onPrefs({ zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value)) });
 
   const focusCell = (row: number, col: number) => {
     // A new row may still be rendering, so wait one tick.
@@ -123,9 +144,37 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
   const totalQty = sum((l) => l.quantity);
   const interState = preview?.interState ?? false;
 
+  const btn = "h-9 min-w-9 rounded-md border bg-background px-2 text-sm hover:bg-muted";
   return (
-    <div className="overflow-x-auto rounded-md border bg-background" data-testid="bill-sheet">
-      <table ref={tableRef} className="w-full min-w-[980px] border-collapse text-sm">
+    <div
+      // "Full width" lets the sheet use the whole screen even though the page is a narrower column. The extra 1.5rem
+      // leaves room for a scroll bar so the page itself never starts to scroll sideways.
+      style={prefs.wide ? { width: "calc(100vw - 3.5rem)", marginLeft: "calc(50% - 50vw + 1.75rem)" } : undefined}
+      data-testid="bill-sheet-area"
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" data-testid="sheet-toolbar">
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Size</span>
+          <button type="button" aria-label="Make the sheet smaller" className={btn} onClick={() => setZoom(zoom - 10)}>−</button>
+          <span className="w-12 text-center tabular-nums" data-testid="sheet-zoom">{zoom}%</span>
+          <button type="button" aria-label="Make the sheet bigger" className={btn} onClick={() => setZoom(zoom + 10)}>+</button>
+          <button type="button" className={`${btn} ${prefs.zoom === 0 ? "bg-primary text-primary-foreground hover:bg-primary" : ""}`} aria-pressed={prefs.zoom === 0} onClick={() => onPrefs({ zoom: 0 })}>Fit to screen</button>
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={prefs.wide} onChange={(e) => onPrefs({ wide: e.target.checked })} /> Use the full width of the screen
+        </label>
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Rows</span>
+          <button type="button" aria-label="Show fewer rows" className={btn} onClick={() => onPrefs({ rows: prefs.rows - 5 })} disabled={prefs.rows <= 6}>−5</button>
+          <span className="w-8 text-center tabular-nums" data-testid="sheet-rows">{rowCount}</span>
+          <button type="button" aria-label="Show more rows" className={btn} onClick={() => onPrefs({ rows: prefs.rows + 5 })} disabled={rowCount >= MAX_BILL_ITEMS}>+5</button>
+          <span className="text-muted-foreground">(up to {MAX_BILL_ITEMS} items on a bill)</span>
+        </div>
+        <span className="text-xs text-muted-foreground">Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
+      </div>
+    <div ref={frameRef} className="resize overflow-auto rounded-md border bg-background" style={{ minHeight: "12rem", maxHeight: "none" }} data-testid="bill-sheet">
+      <div style={{ zoom: zoom / 100 }}>
+      <table ref={tableRef} className="w-full border-collapse text-sm" style={{ minWidth: NATURAL_WIDTH }}>
         <colgroup>
           {[4, 21, 6, 7, 5, 6, 7, 5, 8, 7, 5, 8, 8, 8, 9, 3].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
         </colgroup>
@@ -235,6 +284,8 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           </tr>
         </tbody>
       </table>
+      </div>
+    </div>
     </div>
   );
 }
