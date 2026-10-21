@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CustomerPicker } from "@/components/customer-picker";
 import { ProductPicker, type BillableProduct } from "@/components/product-picker";
 import { StateSelect } from "@/components/state-select";
-import { StockPanel } from "@/components/stock-panel";
+import { StockBar, StockPanel } from "@/components/stock-panel";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
@@ -54,7 +54,6 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   const [lines, setLines] = useState<Line[]>(() => [blankLine(initialProductId)]);
   const [charges, setCharges] = useState<Record<ChargeKey, string>>({ CARTON: "", CRATE: "", FREIGHT: "" });
   const [activeRow, setActiveRow] = useState<number | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
   const [payMode, setPayMode] = useState<PayMode>("FULL");
   const [paidAmount, setPaidAmount] = useState("");
@@ -104,7 +103,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   const takingNow = activeProduct
     ? lines.filter((l) => l.productId === activeProduct.id).reduce((sum, l) => sum.plus(linePieces(l, activeProduct)), D(0)).toString()
     : "0";
-  const firstPreviewLine = preview?.lines.find((l) => l.productId === activeProduct?.id);
+  const stockNow = preview?.lines.find((l) => l.productId === activeProduct?.id)?.availableBefore ?? activeProduct?.stock;
 
   async function save(confirmShortfall: boolean) {
     if (!customer) return toast.error("Choose a customer first.");
@@ -140,7 +139,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-44 lg:pb-28">
       <h1 className="mb-4 text-xl font-semibold">New bill</h1>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
@@ -170,13 +169,13 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             const previewIndex = filledLines.findIndex((l) => l.rowId === line.rowId);
             const pl = previewIndex >= 0 ? preview?.lines[previewIndex] : undefined;
             return (
-              <Card key={line.rowId} data-testid="bill-line" onFocusCapture={() => { setActiveRow(line.rowId); setPanelOpen(true); }}>
+              <Card key={line.rowId} data-testid="bill-line" onFocusCapture={() => { setActiveRow(line.rowId); }}>
                 <CardContent className="space-y-3 pt-6">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Sl no {index + 1}</span>
                     {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((l) => l.rowId !== line.rowId))}>Remove</Button>}
                   </div>
-                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, unitPrice: "" }); setActiveRow(line.rowId); setPanelOpen(true); }} />
+                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, unitPrice: "" }); setActiveRow(line.rowId); }} />
                   {product && (
                     <>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -250,25 +249,15 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
           </CardContent></Card>
         </div>
 
-        {/* Stock check: sticky beside the form on a laptop, a floating card above the Save bar on a phone. */}
-        <aside className={`fixed inset-x-3 bottom-20 z-20 max-h-[45vh] overflow-auto lg:static lg:z-auto lg:max-h-none lg:self-start ${panelOpen ? "" : "hidden lg:block"}`}>
-          <div className="lg:sticky lg:top-4">
-            <StockPanel
-              product={activeProduct}
-              availableNow={firstPreviewLine?.availableBefore ?? activeProduct?.stock}
-              takingNow={takingNow}
-              others={products}
-              onClose={() => setPanelOpen(false)}
-            />
-          </div>
+        {/* Stock check: a sticky card beside the form on a laptop; on a phone a slim bar sits above the Save button. */}
+        <aside className="hidden lg:sticky lg:top-4 lg:block lg:self-start">
+          <StockPanel product={activeProduct} availableNow={stockNow} takingNow={takingNow} others={products} />
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background p-3">
-        {!panelOpen && activeProduct && (
-          <Button variant="outline" className="h-14 lg:hidden" onClick={() => setPanelOpen(true)}>Stock</Button>
-        )}
-        <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl flex-1 text-lg" disabled={saving} onClick={() => save(false)}>
+      <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t bg-background p-3">
+        <div className="mx-auto max-w-5xl lg:hidden"><StockBar product={activeProduct} availableNow={stockNow} takingNow={takingNow} /></div>
+        <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl text-lg" disabled={saving} onClick={() => save(false)}>
           {saving ? "Saving…" : preview ? `Save bill · ${formatINR(preview.grandTotal)}` : "Save bill"}
         </Button>
       </div>

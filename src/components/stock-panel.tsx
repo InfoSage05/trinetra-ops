@@ -12,24 +12,42 @@ type Props = {
   /** Pieces this bill takes of the item (all lines of that item added together). */
   takingNow: string;
   others: PanelProduct[];
-  onClose?: () => void;
 };
 
-/** The "stock check" shown beside the billing form: how much of the item being billed is really on the shelf. */
-export function StockPanel({ product, availableNow, takingNow, others, onClose }: Props) {
+function figures(product: PanelProduct | undefined, availableNow: string | undefined, takingNow: string) {
   const available = D(availableNow ?? product?.stock ?? 0);
   const taking = D(takingNow || 0);
   const left = available.minus(taking);
   const reorder = D(product?.reorderLevel ?? 0);
   const short = left.isNegative();
   const low = !short && reorder.greaterThan(0) && left.lessThanOrEqualTo(reorder);
+  return { available, taking, left, reorder, short, low };
+}
+
+/** One-line version for phones, where a full card would cover the form. */
+export function StockBar({ product, availableNow, takingNow }: Omit<Props, "others">) {
+  if (!product) return null;
+  const { available, taking, left, short, low } = figures(product, availableNow, takingNow);
+  return (
+    <div className={`rounded-lg border bg-background px-3 py-2 text-sm shadow-md ${short ? "border-destructive" : ""}`} data-testid="stock-bar">
+      <p className="truncate font-medium">{product.name}</p>
+      <p>
+        In stock: <b>{describeStock(available.toString(), product.qtyPerCarton)}</b>
+        {taking.greaterThan(0) && (
+          <> · After this bill: <b className={short ? "text-destructive" : low ? "text-amber-600" : ""}>{short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStock(left.toString(), product.qtyPerCarton)}</b></>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** The "stock check" shown beside the billing form: how much of the item being billed is really on the shelf. */
+export function StockPanel({ product, availableNow, takingNow, others }: Props) {
+  const { available, taking, left, reorder, short, low } = figures(product, availableNow, takingNow);
 
   return (
     <div className="rounded-lg border bg-background p-4 shadow-md" data-testid="stock-panel">
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="text-base font-semibold">Stock check</h2>
-        {onClose && <button type="button" onClick={onClose} className="text-sm text-muted-foreground underline lg:hidden">Hide</button>}
-      </div>
+      <h2 className="text-base font-semibold">Stock check</h2>
       {product ? (
         <div className="mt-2 space-y-2">
           <p className="font-medium">{product.name} <span className="text-sm text-muted-foreground">({product.sku})</span></p>
@@ -62,7 +80,7 @@ export function StockPanel({ product, availableNow, takingNow, others, onClose }
         <p className="mt-2 text-sm text-muted-foreground">Choose an item to see how much is in stock.</p>
       )}
       {others.length > 0 && (
-        <div className="mt-4 hidden border-t pt-3 lg:block">
+        <div className="mt-4 border-t pt-3">
           <p className="mb-1 text-xs uppercase text-muted-foreground">All items</p>
           <ul className="max-h-56 space-y-1 overflow-auto text-sm">
             {others.map((o) => (
