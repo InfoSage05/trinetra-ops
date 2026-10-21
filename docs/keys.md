@@ -25,7 +25,7 @@ It uses open-source models through any "OpenAI-compatible" host. Pick **one** ho
 
 | Host | Create the key | `LLM_BASE_URL` | Example `LLM_MODEL` |
 |------|----------------|----------------|----------------------|
-| **Groq** (fast, has a free tier; recommended) | https://console.groq.com/keys | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| **Groq** (fast, has a free tier; recommended) | https://console.groq.com/keys | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` |
 | OpenRouter (many models, some free) | https://openrouter.ai/keys | `https://openrouter.ai/api/v1` | pick one marked "free" at https://openrouter.ai/models |
 | Together AI | https://api.together.ai/settings/api-keys | `https://api.together.xyz/v1` | see https://docs.together.ai/docs/serverless-models |
 | Hugging Face | https://huggingface.co/settings/tokens | `https://router.huggingface.co/v1` | see https://huggingface.co/models?inference_provider=all&pipeline_tag=text-generation |
@@ -37,7 +37,7 @@ Set these in Vercel (and in your local `.env` if you want to try it on your comp
 ```
 LLM_BASE_URL=https://api.groq.com/openai/v1
 LLM_API_KEY=<the key you created>
-LLM_MODEL=llama-3.3-70b-versatile
+LLM_MODEL=openai/gpt-oss-120b
 ```
 
 ### Voice (optional, needs the host above to offer speech-to-text)
