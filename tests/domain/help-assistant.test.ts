@@ -26,7 +26,7 @@ describe("help assistant", () => {
       model: "m",
       complete: async ({ user }) => {
         sent = user;
-        return JSON.stringify({ answer: "1. Open Products. 2. Press Rates and names.", links: ["/products", "/not-a-page", "/products", "/settings"] });
+        return JSON.stringify({ answer: "1. Open **Products**. 2. Press `Rates and names`.", links: ["/products", "/not-a-page", "/products", "/settings"] });
       },
     });
     const r = await askHelper(owner, { question: "rate kaise badlu", page: "/bills", history: [{ from: "me", text: "hello" }] });
