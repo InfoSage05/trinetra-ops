@@ -20,13 +20,14 @@ test("overselling asks for confirmation, then payment and a return work on the b
 
   await page.getByRole("button", { name: "Choose item…" }).click();
   await page.getByRole("option", { name: /E2E Rose Candle/ }).click();
-  await page.getByLabel("Quantity").fill("8"); // only 5 in stock
-  await expect(page.getByText("Short by 3")).toBeVisible();
+  await page.getByLabel("Cartons", { exact: true }).fill("2"); // 2 cartons x 4 = 8 pieces, only 5 in stock
+  await expect(page.getByTestId("stock-bar")).toContainText("Short by 3 pcs");
+  await expect(page.getByText("Grand total")).toBeVisible(); // the server's total has arrived
 
   // Pay on credit, so a payment can be recorded afterwards.
   await page.getByRole("button", { name: "On credit" }).click();
   await page.getByRole("button", { name: /Save bill/ }).click();
-  await expect(page.getByText("Not enough stock")).toBeVisible();
+  await expect(page.getByRole("alertdialog").getByText("Not enough stock")).toBeVisible();
   await page.getByRole("button", { name: "Bill anyway" }).click();
   await expect(page).toHaveURL(/\/bills\/[^/]+$/);
 
@@ -54,14 +55,14 @@ test("worker records production and a count; owner approves the count", async ({
   await workerPage.goto("/inventory");
   const row = workerPage.locator("li", { hasText: "E2E Jasmine Candle" });
   await row.getByRole("button", { name: "+ Made" }).click();
-  await workerPage.getByRole("dialog").getByRole("textbox").fill("10");
+  await workerPage.getByLabel("Extra pieces").fill("10");
   await workerPage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(workerPage.getByText("Production added")).toBeVisible();
   await expect(workerPage.getByRole("button", { name: "Correct" })).toHaveCount(0); // owner-only
 
   await workerPage.goto("/inventory/counts");
   await workerPage.locator("#item").selectOption({ label: "E2E Jasmine Candle (E2E-3)" });
-  await workerPage.locator("#counted").fill("25");
+  await workerPage.locator("#looseCounted").fill("25");
   await workerPage.getByRole("button", { name: "Save count" }).click();
   await expect(workerPage.getByText("Count sent to the owner")).toBeVisible();
 

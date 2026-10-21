@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { prisma, type Db } from "@/lib/db";
-import type { PaymentLogEntry } from "@/generated/prisma/client";
+import { Prisma, type PaymentLogEntry } from "@/generated/prisma/client";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { D, ZERO, formatINR, toFixed2 } from "@/lib/money";
@@ -33,6 +33,28 @@ export async function getPaymentSummaries(db: Db, billIds: string[]): Promise<Ma
     const status: PaymentStatus = amountDue.lessThanOrEqualTo(0) ? "PAID" : amountPaid.greaterThan(0) ? "PARTIAL" : "UNPAID";
     return [b.id, { billId: b.id, grandTotal, creditedTotal, netReceivable, amountPaid, amountDue, status }];
   }));
+}
+
+export type OutstandingBill = {
+  billId: string; customerId: string; customerName: string; invoiceNumber: string; billDate: Date; grandTotal: Decimal; amountDue: Decimal;
+};
+
+/**
+ * Every bill that still has money owing, worked out in one query (no matter how many bills exist).
+ * Same rule as getPaymentSummaries: total, less credit notes (never below zero), less payments received.
+ */
+export async function listOutstandingBills(db: Db, filter: { customerId?: string } = {}): Promise<OutstandingBill[]> {
+  const rows = await db.$queryRaw<{ billId: string; customerId: string; customerName: string; invoiceNumber: string; billDate: Date; grandTotal: string; amountDue: string }[]>(Prisma.sql`
+    SELECT b.id AS "billId", b."customerId", b."customerName", b."invoiceNumber", b."billDate",
+           b."grandTotal"::text AS "grandTotal",
+           (GREATEST(b."grandTotal" - COALESCE(cn.total, 0), 0) - COALESCE(p.total, 0))::text AS "amountDue"
+    FROM bills b
+    LEFT JOIN (SELECT "billId", SUM("grandTotal") AS total FROM credit_notes GROUP BY "billId") cn ON cn."billId" = b.id
+    LEFT JOIN (SELECT "billId", SUM(amount) AS total FROM payment_log GROUP BY "billId") p ON p."billId" = b.id
+    WHERE GREATEST(b."grandTotal" - COALESCE(cn.total, 0), 0) - COALESCE(p.total, 0) > 0
+      ${filter.customerId ? Prisma.sql`AND b."customerId" = ${filter.customerId}` : Prisma.empty}
+    ORDER BY b."billDate" ASC`);
+  return rows.map((r) => ({ ...r, grandTotal: D(r.grandTotal), amountDue: D(r.amountDue) }));
 }
 
 export async function getPaymentSummary(db: Db, billId: string): Promise<PaymentSummary> {

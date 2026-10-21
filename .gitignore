@@ -51,3 +51,8 @@ next-env.d.ts
 .rehearsal.dump
 .pgdata.log
 .dev.log
+
+new in voice.xlsx
+
+# Excel lock files
+~$*

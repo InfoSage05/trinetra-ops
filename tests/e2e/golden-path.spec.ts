@@ -10,7 +10,7 @@ async function login(page: Page, who: { phone: string; password: string }) {
   await expect(page).toHaveURL(/\/dashboard/);
 }
 
-test("owner bills 3 candles; stock drops from 20 to 17", async ({ page }) => {
+test("owner bills 1 carton + 3 pieces with freight; stock panel shows the item; stock drops from 20 to 7", async ({ page }) => {
   await login(page, E2E_OWNER);
   await page.goto("/billing/new");
 
@@ -20,8 +20,15 @@ test("owner bills 3 candles; stock drops from 20 to 17", async ({ page }) => {
 
   await page.getByRole("button", { name: "Choose item…" }).click();
   await page.getByRole("option", { name: /E2E Lavender Candle/ }).click();
-  await page.getByLabel("Quantity").fill("3");
-  await expect(page.getByText("Total", { exact: true })).toBeVisible(); // live preview arrived
+  // The stock panel appears beside the form as soon as an item is chosen.
+  await expect(page.getByTestId("stock-bar")).toContainText("2 cartons (20 pcs)");
+  await expect(page.getByTestId("qty-per-carton")).toHaveText("10");
+  await page.getByLabel("Cartons", { exact: true }).fill("1");
+  await page.getByLabel("Extra pieces").fill("3");
+  await expect(page.getByTestId("total-qty")).toContainText("13");
+  await expect(page.getByTestId("stock-bar")).toContainText("After this bill: 7 pcs");
+  await page.getByLabel("Freight charges").fill("100");
+  await expect(page.getByText("Grand total")).toBeVisible(); // live preview arrived
 
   await page.getByRole("button", { name: /Save bill/ }).click();
   await expect(page).toHaveURL(/\/bills\/[^/]+$/);
@@ -34,7 +41,7 @@ test("owner bills 3 candles; stock drops from 20 to 17", async ({ page }) => {
   expect(pdf.headers()["content-type"]).toContain("application/pdf");
 
   await page.goto("/inventory");
-  await expect(page.locator("li", { hasText: "E2E Lavender Candle" })).toContainText("17");
+  await expect(page.locator("li", { hasText: "E2E Lavender Candle" })).toContainText("7 pcs");
 });
 
 test("a worker cannot open billing and sees no money", async ({ page }) => {

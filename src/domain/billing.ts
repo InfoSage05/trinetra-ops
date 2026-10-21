@@ -7,20 +7,48 @@ import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { stateName } from "@/lib/gst";
 import { D, ZERO, toFixed2 } from "@/lib/money";
 import { financialYearOf } from "@/lib/time";
-import { entityId, idempotencyKey, money, optionalText, parseInput, positiveMoney, quantity, stateCode } from "@/lib/validation";
+import {
+  entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveMoney, quantity, stateCode,
+} from "@/lib/validation";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
-import { computeLine, computeTotals, isInterState, type DocumentTotals, type LineAmounts } from "@/domain/tax";
+import { computeLine, computeTotals, isInterState, taxOnTaxableValue, type DocumentTotals, type LineAmounts, type TaxSplit } from "@/domain/tax";
 import { getStockLevels, writeLedgerEntry } from "@/domain/stock";
 import { allocateNumber } from "@/domain/numbering";
 import { requireBusinessProfile } from "@/domain/settings";
 
 export const PAYMENT_METHODS = ["CASH", "UPI", "BANK_TRANSFER", "CHEQUE", "CARD", "OTHER"] as const;
 
-export const billLineSchema = z.object({
-  productId: entityId,
-  quantity,
-  unitPrice: money.optional(),
-  discountAmount: money.optional(),
+export const CHARGE_KINDS = ["CARTON", "CRATE", "FREIGHT", "OTHER"] as const;
+export type ChargeKind = (typeof CHARGE_KINDS)[number];
+export const CHARGE_LABELS: Record<ChargeKind, string> = {
+  CARTON: "Carton charges", CRATE: "Extra crate charges", FREIGHT: "Freight charges", OTHER: "Other charges",
+};
+
+/**
+ * A line is entered either as a plain `quantity` in pieces, or as `cartons` (+ optional `loosePieces`).
+ * Each product has its own pieces-per-carton, so cartons are resolved against the product in computeBill.
+ */
+export const billLineSchema = z
+  .object({
+    productId: entityId,
+    quantity: quantity.optional(),
+    cartons: nonNegativeQuantity.optional(),
+    loosePieces: nonNegativeQuantity.optional(),
+    unitPrice: money.optional(),
+    discountAmount: money.optional(),
+  })
+  .superRefine((line, ctx) => {
+    const hasPieces = line.quantity !== undefined;
+    const hasCartons = line.cartons !== undefined || line.loosePieces !== undefined;
+    if (hasPieces && hasCartons) ctx.addIssue({ code: "custom", message: "Enter either cartons or a quantity in pieces, not both.", path: ["quantity"] });
+    if (!hasPieces && !hasCartons) ctx.addIssue({ code: "custom", message: "Enter the number of cartons.", path: ["cartons"] });
+  });
+
+export const billChargeSchema = z.object({
+  kind: z.enum(CHARGE_KINDS),
+  label: optionalText(60),
+  amount: positiveMoney,
+  gstRate: gstRate.optional(),
 });
 
 export const billDraftSchema = z.object({
@@ -29,19 +57,34 @@ export const billDraftSchema = z.object({
   deliveryAddress: optionalText(300),
   notes: optionalText(500),
   lines: z.array(billLineSchema).min(1, "Add at least one item.").max(100, "A bill can have at most 100 lines."),
+  charges: z
+    .array(billChargeSchema)
+    .max(10)
+    .default([])
+    .refine(
+      (charges) => {
+        const kinds = charges.filter((c) => c.kind !== "OTHER").map((c) => c.kind);
+        return new Set(kinds).size === kinds.length;
+      },
+      "Each of carton, crate and freight charges can appear only once."
+    ),
 });
 
 export type BillDraft = z.output<typeof billDraftSchema>;
 
 export type PreviewLine = LineAmounts & {
   productId: string; productName: string; productSku: string; hsnCode: string; unit: string;
-  quantity: Decimal; unitPrice: Decimal; gstRate: Decimal;
+  quantity: Decimal; qtyPerCarton: number; cartons: Decimal; unitPrice: Decimal; gstRate: Decimal;
   availableBefore: Decimal; shortfallQuantity: Decimal | null;
+};
+
+export type PreviewCharge = TaxSplit & {
+  chargeNo: number; kind: ChargeKind; label: string; taxableValue: Decimal; gstRate: Decimal; lineTotal: Decimal;
 };
 
 export type BillPreview = DocumentTotals & {
   customerId: string; customerName: string; placeOfSupply: string; placeOfSupplyName: string;
-  interState: boolean; hasShortfall: boolean; lines: PreviewLine[];
+  interState: boolean; hasShortfall: boolean; lines: PreviewLine[]; charges: PreviewCharge[];
 };
 
 /** Shared by previewBill and createBill: always computed from current database state. */
@@ -61,7 +104,12 @@ export async function computeBill(db: Db, draft: BillDraft) {
     if (!product) throw new NotFoundError(`Product on line ${index + 1}`);
     if (!product.isActive) throw new DomainError("PRODUCT_INACTIVE", `${product.name} is marked inactive.`);
 
-    const qty = D(line.quantity);
+    const qtyPerCarton = product.qtyPerCarton;
+    const qty = line.quantity !== undefined
+      ? D(line.quantity)
+      : D(line.cartons ?? 0).times(qtyPerCarton).plus(D(line.loosePieces ?? 0));
+    if (!qty.greaterThan(0)) throw new ValidationError(`Line ${index + 1} (${product.name}): enter at least 1 carton or piece.`);
+
     const unitPrice = D(line.unitPrice ?? product.unitPrice);
     let amounts: LineAmounts;
     try {
@@ -78,16 +126,28 @@ export async function computeBill(db: Db, draft: BillDraft) {
     return {
       ...amounts,
       productId: product.id, productName: product.name, productSku: product.sku, hsnCode: product.hsnCode, unit: product.unit,
-      quantity: qty, unitPrice, gstRate: D(product.gstRate),
+      quantity: qty, qtyPerCarton, cartons: qty.div(qtyPerCarton).toDecimalPlaces(2), unitPrice, gstRate: D(product.gstRate),
       availableBefore, shortfallQuantity: qty.greaterThan(usable) ? qty.minus(usable) : null,
     };
   });
 
+  // Packing/freight on a composite supply follow the principal supply, so by default they take the highest item rate.
+  const defaultChargeRate = lines.reduce((max, l) => Decimal.max(max, l.gstRate), ZERO);
+  const charges: PreviewCharge[] = draft.charges.map((c, i) => {
+    const taxableValue = D(c.amount);
+    const rate = D(c.gstRate ?? defaultChargeRate);
+    const tax = taxOnTaxableValue(taxableValue, rate, interState);
+    return {
+      chargeNo: i + 1, kind: c.kind, label: c.label ?? CHARGE_LABELS[c.kind], taxableValue, gstRate: rate, ...tax,
+      lineTotal: taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount),
+    };
+  });
+
   const preview: BillPreview = {
-    ...computeTotals(lines),
+    ...computeTotals([...lines, ...charges.map((c) => ({ ...c, grossAmount: c.taxableValue, discountAmount: ZERO }))]),
     customerId: customer.id, customerName: customer.name,
     placeOfSupply: draft.placeOfSupply, placeOfSupplyName: stateName(draft.placeOfSupply),
-    interState, hasShortfall: lines.some((l) => l.shortfallQuantity !== null), lines,
+    interState, hasShortfall: lines.some((l) => l.shortfallQuantity !== null), lines, charges,
   };
   return { preview, profile, customer };
 }
@@ -99,6 +159,8 @@ export async function previewBill(session: Session | null, rawInput: unknown): P
 
 export const createBillSchema = billDraftSchema.extend({
   idempotencyKey,
+  /** Raised against a customer's pending order; the order's delivered quantity is worked out from its bills. */
+  orderId: entityId.optional(),
   confirmShortfall: z.boolean().default(false),
   initialPayment: z.object({ amount: positiveMoney, method: z.enum(PAYMENT_METHODS), reference: optionalText(100) }).optional(),
 });
@@ -132,6 +194,13 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
         throw new ValidationError("Payment received cannot be more than the bill total.");
       }
 
+      if (input.orderId) {
+        const order = await tx.order.findUnique({ where: { id: input.orderId } });
+        if (!order) throw new NotFoundError("Order");
+        if (order.customerId !== customer.id) throw new ValidationError("This order belongs to a different customer.");
+        if (order.cancelledAt || order.closedAt) throw new DomainError("ORDER_NOT_OPEN", "This order is cancelled or closed, so it cannot be billed.");
+      }
+
       const financialYear = financialYearOf();
       const invoiceNumber = await allocateNumber(tx, "INVOICE", financialYear);
 
@@ -147,14 +216,20 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
           taxableTotal: toFixed2(preview.taxableTotal), cgstTotal: toFixed2(preview.cgstTotal),
           sgstTotal: toFixed2(preview.sgstTotal), igstTotal: toFixed2(preview.igstTotal),
           taxTotal: toFixed2(preview.taxTotal), roundOff: toFixed2(preview.roundOff), grandTotal: toFixed2(preview.grandTotal),
-          createdBy: session.userId, idempotencyKey: key,
+          createdBy: session.userId, idempotencyKey: key, orderId: input.orderId ?? null,
           lineItems: {
             create: preview.lines.map((l, i) => ({
               lineNo: i + 1, productId: l.productId, productName: l.productName, productSku: l.productSku,
-              hsnCode: l.hsnCode, unit: l.unit, quantity: toFixed2(l.quantity), unitPrice: toFixed2(l.unitPrice),
+              hsnCode: l.hsnCode, unit: l.unit, qtyPerCarton: l.qtyPerCarton, quantity: toFixed2(l.quantity), unitPrice: toFixed2(l.unitPrice),
               discountAmount: toFixed2(l.discountAmount), taxableValue: toFixed2(l.taxableValue), gstRate: toFixed2(l.gstRate),
               cgstAmount: toFixed2(l.cgstAmount), sgstAmount: toFixed2(l.sgstAmount), igstAmount: toFixed2(l.igstAmount),
               lineTotal: toFixed2(l.lineTotal), shortfallQuantity: l.shortfallQuantity ? toFixed2(l.shortfallQuantity) : null,
+            })),
+          },
+          charges: {
+            create: preview.charges.map((c) => ({
+              chargeNo: c.chargeNo, kind: c.kind, label: c.label, taxableValue: toFixed2(c.taxableValue), gstRate: toFixed2(c.gstRate),
+              cgstAmount: toFixed2(c.cgstAmount), sgstAmount: toFixed2(c.sgstAmount), igstAmount: toFixed2(c.igstAmount), lineTotal: toFixed2(c.lineTotal),
             })),
           },
         },
@@ -197,7 +272,7 @@ export async function listBillableProducts(session: Session | null) {
   requireRole(session, ["OWNER"]);
   const products = await prisma.product.findMany({
     where: { isActive: true },
-    select: { id: true, sku: true, name: true, unit: true, unitPrice: true, gstRate: true },
+    select: { id: true, sku: true, name: true, unit: true, qtyPerCarton: true, reorderLevel: true, unitPrice: true, gstRate: true },
     orderBy: { name: "asc" },
   });
   const levels = await getStockLevels(prisma, products.map((p) => p.id));

@@ -40,3 +40,4 @@ Settings → Manage worker logins → **Disable**. They are logged out everywher
 ### Rehearsal log
 | Date | Backup file | Result | By |
 |------|-------------|--------|----|
+| 2026-10-21 | Local test database dumped with pg_dump 17 (same command as the workflow), encrypted with gpg AES-256, restored with scripts/restore-rehearsal.sh into a throwaway Postgres 17 container | PASS: row counts matched the source for all 8 tables (2/5/3/3/3/10/2/1); all 8 immutability triggers restored. Still repeat once with a real GitHub Actions artifact before go-live. | Claude (Docker) |

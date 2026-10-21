@@ -34,3 +34,16 @@ export function formatDateIN(date: Date): string {
   const { year, month, day } = istDateParts(date);
   return `${String(day).padStart(2, "0")}-${String(month).padStart(2, "0")}-${year}`;
 }
+
+/** From the start of the `from` day to the end of the `to` day in IST (dates as YYYY-MM-DD). */
+export function istRange(from: string, to: string): { start: Date; end: Date } {
+  const start = new Date(Date.parse(`${from}T00:00:00Z`) - IST_OFFSET_MS);
+  const end = new Date(Date.parse(`${to}T00:00:00Z`) + 24 * 60 * 60 * 1000 - IST_OFFSET_MS);
+  return { start, end };
+}
+
+/** Today's date in IST as YYYY-MM-DD. */
+export function istToday(date: Date = new Date()): string {
+  const { year, month, day } = istDateParts(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}

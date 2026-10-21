@@ -3,14 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { getSession } from "@/lib/session";
 import { formatINR } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
-import { listBills } from "@/domain/reports";
+import { listBillsPage } from "@/domain/reports";
 
 const STATUS_LABEL = { PAID: "Paid", PARTIAL: "Part paid", UNPAID: "Unpaid (on credit)" } as const;
 
-export default async function BillsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
-  const { q, status } = await searchParams;
+export default async function BillsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
+  const { q, status, page: pageParam } = await searchParams;
+  const page = Math.max(1, Math.min(10_000, Number.parseInt(pageParam ?? "1", 10) || 1));
   const validStatus = status === "PAID" || status === "PARTIAL" || status === "UNPAID" || status === "DUE" ? status : undefined;
-  const bills = await listBills(await getSession(), { search: q || undefined, status: validStatus });
+  const { bills, hasMore } = await listBillsPage(await getSession(), { search: q || undefined, status: validStatus, page });
+  const pageLink = (p: number) => `/bills?${new URLSearchParams({ ...(q ? { q } : {}), ...(validStatus ? { status: validStatus } : {}), page: String(p) })}`;
   return (
     <div className="space-y-4">
       <div className="flex items-center"><h1 className="mr-auto text-xl font-semibold">Bills</h1><Link className="underline" href="/billing/new">New bill</Link></div>
@@ -33,6 +35,12 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
         ))}
         {bills.length === 0 && <li className="p-6 text-center text-muted-foreground">No bills found.</li>}
       </ul>
+      {(page > 1 || hasMore) && (
+        <div className="flex justify-between text-sm">
+          {page > 1 ? <Link className="underline" href={pageLink(page - 1)}>← Newer bills</Link> : <span />}
+          {hasMore && <Link className="underline" href={pageLink(page + 1)}>Older bills →</Link>}
+        </div>
+      )}
     </div>
   );
 }

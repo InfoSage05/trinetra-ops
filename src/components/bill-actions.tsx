@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,7 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
         {due.greaterThan(0) && <Button onClick={() => { setAmount(view.payment.amountDue); setPayOpen(true); }}>Record payment</Button>}
         {due.isNegative() && <Button variant="destructive" onClick={() => { setAmount(view.payment.amountDue); setPayOpen(true); }}>Record refund ({formatINR(due.abs())})</Button>}
         <Button variant="outline" onClick={() => setReturnOpen(true)}>Return items</Button>
+        <Link className={linkButton()} href={`/customers/${view.customer.id}`}>Customer</Link>
         <a className={linkButton()} href={`/print/bills/${view.id}?format=a4`} target="_blank" rel="noreferrer">Print A4</a>
         <a className={linkButton()} href={`/print/bills/${view.id}?format=thermal`} target="_blank" rel="noreferrer">Print receipt</a>
         <a className={linkButton()} href={`/api/bills/${view.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
