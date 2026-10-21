@@ -140,3 +140,15 @@ describe("extra charges (carton, crate, freight)", () => {
     expect(note.grandTotal.toFixed(2)).toBe("70.80"); // 6 x 10 = 60 + 18% only; the charge is not credited
   });
 });
+
+describe("re-importing a price list", () => {
+  it("does not reset carton sizes when the sheet has no carton column", async () => {
+    const owner = await makeUser("OWNER");
+    const p = await makeProduct({ sku: "KEEP-1", name: "Keep Me", qtyPerCarton: 24 });
+    const row = { rowNumber: 2, sku: "KEEP-1", name: "Keep Me", hsnCode: "3406", unitPrice: "12", gstRate: "18" };
+    await importProducts(owner, { rows: [row], dryRun: false });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: p.id } })).qtyPerCarton).toBe(24);
+    await importProducts(owner, { rows: [{ ...row, qtyPerCarton: "30" }], dryRun: false });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: p.id } })).qtyPerCarton).toBe(30);
+  });
+});

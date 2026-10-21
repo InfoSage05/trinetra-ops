@@ -101,6 +101,15 @@ describe("applyStockProposal", () => {
     expect(again.skipped).toHaveLength(1);
   });
 
+  it("keeps a counted zero (sold out) so the gap against recorded stock is not hidden", async () => {
+    const { worker, rose } = await world();
+    const p = await proposeStockCountsFromSheet(worker, { headers: ["item", "qty"], rows: [{ values: { item: "Rose Candle", qty: "0" } }] });
+    expect(p.lines[0]).toMatchObject({ productId: rose.id, pieces: "0" });
+    const apply = { kind: "COUNT", channel: "SHEET", extractor: "RULES", sourceText: "", lines: [{ productId: rose.id, pieces: "0" }], idempotencyKey: "apply-key-0009" };
+    expect(await applyStockProposal(worker, apply)).toMatchObject({ saved: 1 });
+    await expect(applyStockProposal(worker, { ...apply, kind: "PRODUCTION", idempotencyKey: "apply-key-0010" })).rejects.toThrow();
+  });
+
   it("reads an unusual sheet layout through the model", async () => {
     const { worker, birthday } = await world();
     setLlmClientForTests({ model: "m", complete: async () => '{"items":[{"name":"Birthday","quantity":4,"unit":"carton"}]}' });

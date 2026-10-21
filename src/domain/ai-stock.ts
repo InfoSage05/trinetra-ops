@@ -5,7 +5,7 @@ import { DomainError, ValidationError } from "@/lib/errors";
 import { D } from "@/lib/money";
 import { extractJson, getLlmClient } from "@/lib/llm";
 import { matchName, parseQuantityLines, type ParsedItem, type QtyUnit } from "@/lib/text-entry";
-import { entityId, idempotencyKey, parseInput, quantity } from "@/lib/validation";
+import { entityId, idempotencyKey, nonNegativeQuantity, parseInput } from "@/lib/validation";
 import { writeLedgerEntry } from "@/domain/stock";
 import { submitStockCount } from "@/domain/stock-counts";
 
@@ -43,7 +43,7 @@ const MAX_ITEMS = 100;
 const extractedSchema = z.object({
   items: z.array(z.object({
     name: z.string().trim().min(1).max(150),
-    quantity: z.coerce.number().positive().max(1_000_000),
+    quantity: z.coerce.number().min(0).max(1_000_000),
     unit: z.enum(["carton", "piece"]).catch("piece"),
   })).max(MAX_ITEMS),
 });
@@ -146,7 +146,7 @@ function itemsFromSheet(headers: string[], rows: { values: Record<string, string
     const qty = Number(row.values[qtyCol]?.replace(/,/g, ""));
     if (name && Number.isFinite(qty) && qty >= 0) items.push({ name, quantity: qty, unit });
   }
-  return items.filter((i) => i.quantity > 0);
+  return items; // a counted 0 is meaningful: the shelf is empty
 }
 
 /** An uploaded stock sheet (any layout) becomes proposed stock counts. */
@@ -172,9 +172,9 @@ export const applyProposalSchema = z.object({
   extractor: z.enum(["LLM", "RULES"]),
   model: z.string().max(100).nullish(),
   sourceText: z.string().max(MAX_TEXT).default(""),
-  lines: z.array(z.object({ productId: entityId, pieces: quantity })).min(1, "Nothing to save.").max(MAX_ITEMS),
+  lines: z.array(z.object({ productId: entityId, pieces: nonNegativeQuantity })).min(1, "Nothing to save.").max(MAX_ITEMS),
   idempotencyKey,
-});
+}).refine((v) => v.kind === "COUNT" || v.lines.every((l) => Number(l.pieces) > 0), "Every item needs a quantity above zero.");
 
 export type ApplyResult = { saved: number; skipped: { productId: string; reason: string }[] };
 

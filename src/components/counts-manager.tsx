@@ -23,6 +23,8 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
   const [busy, setBusy] = useState(false);
 
   const selected = items.find((i) => i.id === productId);
+  // An empty or unreadable box must not be saved as "counted 0".
+  const hasCount = [cartonsCounted, looseCounted].some((v) => v.trim() !== "") && [cartonsCounted, looseCounted].every((v) => v.trim() === "" || /^\d+(\.\d{1,2})?$/.test(v.trim()));
   const countedPieces = toPieces(cartonsCounted, looseCounted, selected?.qtyPerCarton ?? 1);
 
   async function submit(event: React.FormEvent) {
@@ -54,7 +56,7 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
             </div>
             {selected && <p className="text-sm">1 carton = {selected.qtyPerCarton} pieces. Total counted: <b>{countedPieces}</b> pieces.</p>}
             <div className="space-y-1"><Label htmlFor="note">Note (optional)</Label><Input id="note" className="h-11" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-            <Button type="submit" size="lg" className="h-12" disabled={busy || !productId}>Save count</Button>
+            <Button type="submit" size="lg" className="h-12" disabled={busy || !productId || !hasCount}>Save count</Button>
           </form>
         </CardContent>
       </Card>

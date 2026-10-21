@@ -41,7 +41,7 @@ export async function getSalesReport(session: Session | null, rawInput: unknown)
     prisma.bill.aggregate({ where: billWhere, _count: true, _sum: { taxableTotal: true, cgstTotal: true, sgstTotal: true, igstTotal: true, roundOff: true, grandTotal: true } }),
     prisma.creditNote.aggregate({ where: { noteDate: { gte: start, lt: end } }, _count: true, _sum: { taxableTotal: true, taxTotal: true, grandTotal: true } }),
     prisma.$queryRaw<{ day: string; bills: number; total: string }[]>(Prisma.sql`
-      SELECT to_char("billDate" AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day, COUNT(*)::int AS bills, SUM("grandTotal")::text AS total
+      SELECT to_char(("billDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day, COUNT(*)::int AS bills, SUM("grandTotal")::text AS total
       FROM bills WHERE "billDate" >= ${start} AND "billDate" < ${end} GROUP BY 1 ORDER BY 1`),
     prisma.billLineItem.groupBy({
       by: ["productId", "productName"], where: { bill: billWhere },

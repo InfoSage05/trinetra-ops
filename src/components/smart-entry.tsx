@@ -64,7 +64,7 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
   }
 
   if (reviewing) {
-    const ready = linesReady(reviewing.lines, catalogue);
+    const ready = linesReady(reviewing.lines, catalogue, reviewing.kind === "COUNT");
     return (
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">{reviewing.kind === "PRODUCTION" ? "Check what was made" : "Check the counted stock"}</h2>

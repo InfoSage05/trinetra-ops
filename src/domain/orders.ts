@@ -181,7 +181,7 @@ export async function listOrders(session: Session | null, rawInput: unknown = {}
   const input = parseInput(z.object({ show: z.enum(["OPEN", "ALL"]).default("OPEN"), customerId: entityId.optional(), take: z.number().int().min(1).max(500).default(200) }), rawInput);
   const orders = await prisma.order.findMany({
     where: { ...(input.customerId ? { customerId: input.customerId } : {}), ...(input.show === "OPEN" ? { cancelledAt: null, closedAt: null } : {}) },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }], take: input.show === "OPEN" ? undefined : input.take, include: withProducts,
+    orderBy: input.show === "OPEN" ? [{ dueDate: "asc" }, { createdAt: "asc" }] : [{ createdAt: "desc" }], take: input.show === "OPEN" ? undefined : input.take, include: withProducts,
   });
   const described = await describeOrders(orders, new Date());
   return input.show === "OPEN" ? described.filter((o) => o.open) : described;

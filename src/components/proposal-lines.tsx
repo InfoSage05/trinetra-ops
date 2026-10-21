@@ -35,10 +35,10 @@ export function piecesOf(line: EditableLine, catalogue: CatalogueItem[]): string
 }
 
 /** Every row needs an item and a quantity above zero before it can be saved. */
-export function linesReady(lines: EditableLine[], catalogue: CatalogueItem[]): boolean {
+export function linesReady(lines: EditableLine[], catalogue: CatalogueItem[], allowZero = false): boolean {
   return lines.length > 0 && lines.every((l) => {
     const pieces = piecesOf(l, catalogue);
-    return pieces !== null && D(pieces).greaterThan(0);
+    return pieces !== null && (allowZero ? !D(pieces).isNegative() && l.quantity.trim() !== "" : D(pieces).greaterThan(0));
   });
 }
 

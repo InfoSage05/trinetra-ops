@@ -239,7 +239,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
               <Row label="Round off" value={formatINR(preview.roundOff)} />
               <div className="flex justify-between pt-2 text-xl font-semibold"><span>Grand total</span><span>{formatINR(preview.grandTotal)}</span></div>
               <p className="pt-1 text-muted-foreground">{amountInWords(preview.grandTotal)}</p>
-              {preview.charges.length > 0 && <p className="pt-1 text-xs text-muted-foreground">Charges are taxed at {formatQuantity(preview.charges[0].gstRate)}% (the highest rate among the items).</p>}
+              {preview.charges.length > 0 && <p className="pt-1 text-xs text-muted-foreground">Charges are taxed at {formatQuantity(preview.charges[0].gstRate)}% (the highest rate among the items). Confirm this rate with your CA.</p>}
             </CardContent></Card>
           )}
 

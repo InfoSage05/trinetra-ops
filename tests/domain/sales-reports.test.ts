@@ -41,6 +41,7 @@ describe("sales report", () => {
     expect(report.byCustomer[0].total.greaterThanOrEqualTo(report.byCustomer[1].total)).toBe(true);
     expect(report.byDay).toHaveLength(1);
     expect(report.byDay[0].bills).toBe(2);
+    expect(report.byDay[0].day).toBe(range.from); // the IST calendar day, not shifted by the time zone
 
     const note = await recordReturn(owner, { billId: a.id, reason: "broken", lines: [{ billLineItemId: a.lineItems[0].id, quantity: "10" }], idempotencyKey: "sr-cn-0001" });
     const after = await getSalesReport(owner, range);

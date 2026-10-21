@@ -48,6 +48,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   const errors: { rowNumber: number; message: string }[] = [];
   const valid: z.output<typeof productSchema>[] = [];
   const seen = new Set<string>();
+  const sizeGiven = new Set<string>(); // SKUs whose row actually states a carton size
   for (const row of rows) {
     const result = productSchema.safeParse(row);
     const gst = Number(String(row.gstRate ?? "").replace(/,/g, ""));
@@ -62,6 +63,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
       errors.push({ rowNumber: row.rowNumber, message: `SKU ${result.data.sku} appears more than once in the file` });
     } else {
       seen.add(result.data.sku);
+      if (String(row.qtyPerCarton ?? "").trim() !== "") sizeGiven.add(result.data.sku);
       valid.push(result.data);
     }
   }
@@ -75,7 +77,10 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   await prisma.$transaction(async (tx) => {
     for (const p of valid) {
       const data = { ...p, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
-      await tx.product.upsert({ where: { sku: p.sku }, create: data, update: data });
+      // A price-list sheet with no carton column must not reset carton sizes the owner already set.
+      const { qtyPerCarton, ...withoutSize } = data;
+      await tx.product.upsert({ where: { sku: p.sku }, create: data, update: sizeGiven.has(p.sku) ? data : withoutSize });
+      void qtyPerCarton;
     }
   });
   return { ...summary, created: summary.toCreate, updated: summary.toUpdate };
