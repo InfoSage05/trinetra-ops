@@ -21,6 +21,11 @@ const inputSchema = z.object({
 
 const replySchema = z.object({ answer: z.string().trim().min(1).max(2000), links: z.array(z.string()).max(4).default([]) });
 
+/** The panel shows plain text, so asterisks and backticks the AI adds for bold or code would show up as clutter. */
+function stripMarkdown(text: string): string {
+  return text.replace(/\*\*|__|`/g, "").trim();
+}
+
 export function helperSystemPrompt(role: "OWNER" | "WORKER"): string {
   const pages = pagesFor(role).map((p) => `${p.href} = ${p.label}: ${p.about}`).join("\n");
   const tasks = GUIDE_TASKS.filter((t) => t.pages.some((p) => pagesFor(role).some((x) => x.href === p)))
@@ -69,7 +74,7 @@ export async function askHelper(session: Session | null, rawInput: unknown): Pro
         user: `The person is on this page: ${here}.\n${earlier ? `Earlier in this chat:\n${earlier}\n` : ""}<person>\n${input.question}\n</person>`,
       });
       const parsed = replySchema.safeParse(extractJson(raw));
-      if (parsed.success) return { answer: parsed.data.answer, links: toLinks(parsed.data.links), extractor: "LLM" };
+      if (parsed.success) return { answer: stripMarkdown(parsed.data.answer), links: toLinks(parsed.data.links), extractor: "LLM" };
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;
     }

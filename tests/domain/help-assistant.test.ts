@@ -31,6 +31,7 @@ describe("help assistant", () => {
     });
     const r = await askHelper(owner, { question: "rate kaise badlu", page: "/bills", history: [{ from: "me", text: "hello" }] });
     expect(r.extractor).toBe("LLM");
+    expect(r.answer).toBe("1. Open Products. 2. Press Rates and names.");
     expect(r.links.map((l) => l.href)).toEqual(["/products", "/settings"]);
     expect(sent).toContain("<person>\nrate kaise badlu\n</person>");
     expect(sent).toContain("Bills");
