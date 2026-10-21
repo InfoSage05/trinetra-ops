@@ -29,27 +29,60 @@ export function getLlmClient(): LlmClient | null {
   const apiKey = process.env.LLM_API_KEY?.trim();
   return {
     model,
-    async complete({ system, user }) {
-      let response: Response;
-      try {
-        response = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-          body: JSON.stringify({
-            model, temperature: 0,
-            messages: [{ role: "system", content: system }, { role: "user", content: user }],
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-      } catch {
-        throw new DomainError("AI_UNAVAILABLE", "The AI service did not answer in time.");
-      }
-      if (!response.ok) throw new DomainError("AI_UNAVAILABLE", `The AI service returned an error (${response.status}).`);
-      const body = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
-      const content = body?.choices?.[0]?.message?.content;
-      if (!content) throw new DomainError("AI_UNAVAILABLE", "The AI service sent an empty answer.");
-      return content;
-    },
+    complete: ({ system, user }) =>
+      chat(baseUrl, apiKey, model, [{ role: "system", content: system }, { role: "user", content: user }]),
+  };
+}
+
+type Message = { role: "system" | "user"; content: string | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] };
+
+async function chat(baseUrl: string, apiKey: string | undefined, model: string, messages: Message[]): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+      body: JSON.stringify({ model, temperature: 0, messages }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {
+    throw new DomainError("AI_UNAVAILABLE", "The AI service did not answer in time.");
+  }
+  if (!response.ok) throw new DomainError("AI_UNAVAILABLE", `The AI service returned an error (${response.status}).`);
+  const body = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
+  const content = body?.choices?.[0]?.message?.content;
+  if (!content) throw new DomainError("AI_UNAVAILABLE", "The AI service sent an empty answer.");
+  return content;
+}
+
+/**
+ * Reads a photo. This needs a model that can see images (for example `qwen/qwen3.8-27b` on Groq); text-only models
+ * such as gpt-oss reject images. Set LLM_VISION_MODEL; it uses the same host and key as LLM_*.
+ */
+export type VisionClient = {
+  model: string;
+  describe(input: { system: string; user: string; imageDataUrl: string }): Promise<string>;
+};
+
+let visionOverride: VisionClient | null | undefined;
+
+export function setVisionClientForTests(client: VisionClient | null | undefined) {
+  visionOverride = client;
+}
+
+export function getVisionClient(): VisionClient | null {
+  if (visionOverride !== undefined) return visionOverride;
+  const baseUrl = process.env.LLM_BASE_URL?.trim();
+  const model = process.env.LLM_VISION_MODEL?.trim();
+  if (!baseUrl || !model) return null;
+  const apiKey = process.env.LLM_API_KEY?.trim();
+  return {
+    model,
+    describe: ({ system, user, imageDataUrl }) =>
+      chat(baseUrl, apiKey, model, [
+        { role: "system", content: system },
+        { role: "user", content: [{ type: "text", text: user }, { type: "image_url", image_url: { url: imageDataUrl } }] },
+      ]),
   };
 }
 

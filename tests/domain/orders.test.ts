@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { prisma } from "@/lib/db";
 import { createBill } from "@/domain/billing";
 import { cancelOrder, closeOrder, createOrder, getOrder, getOrderReminders, getPendingRequirements, listOrders } from "@/domain/orders";
-import { proposeOrder } from "@/domain/ai-orders";
-import { setLlmClientForTests } from "@/lib/llm";
+import { imageMimeType, proposeOrder, proposeOrderFromImage } from "@/domain/ai-orders";
+import { setLlmClientForTests, setVisionClientForTests } from "@/lib/llm";
 import { extractDueDate } from "@/lib/text-entry";
 import { DomainError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { istDateParts } from "@/lib/time";
@@ -11,7 +11,7 @@ import { resetDb } from "../helpers/db";
 import { addStock, makeBusinessProfile, makeCustomer, makeProduct, makeSeries, makeUser } from "../helpers/factories";
 
 beforeEach(resetDb);
-afterEach(() => setLlmClientForTests(undefined));
+afterEach(() => { setLlmClientForTests(undefined); setVisionClientForTests(undefined); });
 
 function isoIn(days: number): string {
   const { year, month, day } = istDateParts(new Date());
@@ -166,5 +166,64 @@ describe("proposeOrder", () => {
   it("is for the owner only", async () => {
     const { worker } = await world();
     await expect(proposeOrder(worker, { text: "rose 1 carton" })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("proposeOrderFromImage", () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0]);
+
+  it("turns a photo into a proposal for the chosen customer, never saving anything", async () => {
+    const { owner, customer, rose } = await world();
+    let sentImage = "";
+    setVisionClientForTests({
+      model: "vision-test",
+      describe: async ({ imageDataUrl }) => {
+        sentImage = imageDataUrl;
+        return JSON.stringify({ customer: "someone else", dueDate: isoIn(4), items: [{ name: "rose", quantity: 2, unit: "carton" }] });
+      },
+    });
+    const p = await proposeOrderFromImage(owner, { image: png, customerId: customer.id });
+    expect(sentImage.startsWith("data:image/png;base64,")).toBe(true);
+    expect(p.extractor).toBe("LLM");
+    expect(p.model).toBe("vision-test");
+    expect(p.customer).toMatchObject({ status: "MATCHED", id: customer.id }); // the owner's choice wins over the photo
+    expect(p.dueDate).toBe(isoIn(4));
+    expect(p.lines[0]).toMatchObject({ productId: rose.id, pieces: "48" });
+    expect(await prisma.order.count()).toBe(0);
+  });
+
+  it("reads the customer from the photo when none is chosen", async () => {
+    const { owner, customer } = await world();
+    setVisionClientForTests({ model: "v", describe: async () => JSON.stringify({ customer: "Sharma Traders", items: [] }) });
+    const p = await proposeOrderFromImage(owner, { image: png });
+    expect(p.customer).toMatchObject({ status: "MATCHED", id: customer.id });
+    expect(p.notes.join(" ")).toMatch(/No items/);
+  });
+
+  it("refuses non-pictures, huge files, a missing vision model, unreadable answers and non-owners", async () => {
+    const { owner, worker } = await world();
+    setVisionClientForTests({ model: "v", describe: async () => "{}" });
+    await expect(proposeOrderFromImage(owner, { image: new TextEncoder().encode("MZ-not-a-picture-at-all") })).rejects.toBeInstanceOf(ValidationError);
+    await expect(proposeOrderFromImage(owner, { image: new Uint8Array(5 * 1024 * 1024).fill(0xff) })).rejects.toBeInstanceOf(ValidationError);
+    await expect(proposeOrderFromImage(owner, { image: png, customerId: "nope" })).rejects.toThrow();
+    setVisionClientForTests({ model: "v", describe: async () => "I cannot read this." });
+    await expect(proposeOrderFromImage(owner, { image: png })).rejects.toMatchObject({ code: "AI_BAD_OUTPUT" });
+    setVisionClientForTests(null);
+    await expect(proposeOrderFromImage(owner, { image: png })).rejects.toMatchObject({ code: "VISION_OFF" });
+    await expect(proposeOrderFromImage(worker, { image: png })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("an order made from a photo is saved as coming from a photo", async () => {
+    const { owner, customer, rose } = await world();
+    const order = await createOrder(owner, { customerId: customer.id, dueDate: isoIn(2), idempotencyKey: "order-key-img1", source: "IMAGE", lines: [{ productId: rose.id, cartons: "1" }] });
+    expect(order.source).toBe("IMAGE");
+    expect(order.actorType).toBe("AGENT");
+  });
+
+  it("only accepts real picture formats", () => {
+    expect(imageMimeType(png)).toBe("image/png");
+    expect(imageMimeType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0]))).toBe("image/jpeg");
+    expect(imageMimeType(new TextEncoder().encode("RIFF1234WEBPVP8 "))).toBe("image/webp");
+    expect(imageMimeType(new TextEncoder().encode("GIF89a......."))).toBeNull();
   });
 });

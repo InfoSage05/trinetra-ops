@@ -40,6 +40,16 @@ LLM_API_KEY=<the key you created>
 LLM_MODEL=openai/gpt-oss-120b
 ```
 
+### Photos of orders (optional, same key)
+
+On **New order** there is an **Upload a photo of the order** box. It needs a model that can *see* pictures; text-only models such as `openai/gpt-oss-120b` reject images, so this is a separate setting. On Groq, `qwen/qwen3.8-27b` reads pictures with the same key:
+
+```
+LLM_VISION_MODEL=qwen/qwen3.8-27b
+```
+
+The photo is sent to that host to be read and is **not stored** in the app. The result is a proposal; you check it and press Save order.
+
 ### Voice (optional, needs the host above to offer speech-to-text)
 
 Groq offers Whisper with the **same key**. Set:

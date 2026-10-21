@@ -21,6 +21,7 @@ enum OrderSource {
   MANUAL
   TEXT
   VOICE
+  IMAGE
 }
 
 enum StockLedgerType {

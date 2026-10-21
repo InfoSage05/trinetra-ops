@@ -30,7 +30,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
           <h1 className="text-xl font-semibold">{order.customer.name}</h1>
-          <p className="text-sm text-muted-foreground">Needed by {formatDateIN(order.dueDate)}{order.source !== "MANUAL" ? ` · entered by ${order.source === "VOICE" ? "voice" : "typing"} with the assistant` : ""}</p>
+          <p className="text-sm text-muted-foreground">Needed by {formatDateIN(order.dueDate)}{order.source !== "MANUAL" ? ` · entered by ${order.source === "VOICE" ? "voice" : order.source === "IMAGE" ? "photo" : "typing"} with the assistant` : ""}</p>
           {order.notes && <p className="text-sm">{order.notes}</p>}
         </div>
         {order.dueState === "OVERDUE" && <Badge variant="destructive">Overdue</Badge>}

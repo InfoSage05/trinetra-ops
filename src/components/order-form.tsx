@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,30 +8,34 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LinesEditor, blankLine, linesReady, piecesOf, toEditable, type CatalogueItem, type EditableLine } from "@/components/proposal-lines";
 import { VoiceRecorder } from "@/components/voice-recorder";
-import { createOrderAction, proposeOrderAction } from "@/actions/orders";
+import { createOrderAction, proposeOrderAction, proposeOrderFromImageAction } from "@/actions/orders";
 import { callAction } from "@/lib/client/call-action";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
+import { shrinkImage } from "@/lib/client/shrink-image";
 
 type Props = {
   customers: { id: string; name: string }[];
   catalogue: CatalogueItem[];
   voiceAvailable: boolean;
   aiAvailable: boolean;
+  visionAvailable: boolean;
   initialCustomerId?: string;
 };
 
 type Draft = {
-  channel: "MANUAL" | "TEXT" | "VOICE"; extractor: string | null; model: string | null; sourceText: string; notes: string[];
+  channel: "MANUAL" | "TEXT" | "VOICE" | "IMAGE"; extractor: string | null; model: string | null; sourceText: string; notes: string[];
   customerId: string; dueDate: string; lines: EditableLine[];
 };
 
-export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, initialCustomerId = "" }: Props) {
+export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, visionAvailable, initialCustomerId = "" }: Props) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [fromVoice, setFromVoice] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [orderNote, setOrderNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photoCustomer, setPhotoCustomer] = useState(initialCustomerId);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [key, renewKey] = useIdempotencyKey();
 
   async function check() {
@@ -42,6 +46,22 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, i
     setDraft({
       channel: fromVoice ? "VOICE" : "TEXT", extractor: p.extractor, model: p.model, sourceText: p.sourceText, notes: p.notes,
       customerId: p.customer.id ?? initialCustomerId, dueDate: p.dueDate ?? "", lines: toEditable(p.lines),
+    });
+  }
+
+  async function readPhoto(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    const form = new FormData();
+    form.set("image", await shrinkImage(file));
+    if (photoCustomer) form.set("customerId", photoCustomer);
+    const p = await callAction(proposeOrderFromImageAction(form));
+    setBusy(false);
+    if (photoInput.current) photoInput.current.value = "";
+    if (!p) return;
+    setDraft({
+      channel: "IMAGE", extractor: p.extractor, model: p.model, sourceText: p.sourceText, notes: p.notes,
+      customerId: p.customer.id ?? photoCustomer, dueDate: p.dueDate ?? "", lines: toEditable(p.lines),
     });
   }
 
@@ -78,6 +98,26 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, i
               Fill in by hand
             </Button>
           </div>
+        </section>
+
+        <section className="space-y-2 rounded-md border bg-background p-4">
+          <h2 className="font-semibold">Upload a photo of the order</h2>
+          {visionAvailable ? (
+            <>
+              <p className="text-sm text-muted-foreground">A photo or screenshot of a handwritten or printed order. It is turned into an order for you to check; nothing is saved until you press Save order.</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="photo-customer">Whose order is it? (optional, the photo may say)</Label>
+                <select id="photo-customer" className="h-12 w-full rounded-md border bg-background px-2" value={photoCustomer} onChange={(e) => setPhotoCustomer(e.target.value)}>
+                  <option value="">Read it from the photo</option>
+                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" aria-label="Order photo" disabled={busy} onChange={(e) => readPhoto(e.target.files?.[0])} className="block w-full text-sm" />
+              {busy && <p className="text-sm text-muted-foreground">Reading the photo…</p>}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Photo reading is not switched on yet. It needs an AI model that can see pictures; see <b>docs/keys.md</b> (LLM_VISION_MODEL).</p>
+          )}
         </section>
       </div>
     );

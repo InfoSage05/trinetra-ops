@@ -30,7 +30,7 @@ export const createOrderSchema = z.object({
   dueDate: isoDate,
   notes: optionalText(500),
   lines: z.array(orderLineSchema).min(1, "Add at least one item.").max(100),
-  source: z.enum(["MANUAL", "TEXT", "VOICE"]).default("MANUAL"),
+  source: z.enum(["MANUAL", "TEXT", "VOICE", "IMAGE"]).default("MANUAL"),
   sourceText: optionalText(4000),
   sourceMetadata: z.record(z.string(), z.unknown()).optional(),
   idempotencyKey,

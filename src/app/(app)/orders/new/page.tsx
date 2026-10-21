@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/session";
-import { getLlmClient } from "@/lib/llm";
+import { getLlmClient, getVisionClient } from "@/lib/llm";
 import { sttConfigured } from "@/lib/stt";
 import { searchCustomers } from "@/domain/customers";
 import { getStockOverview } from "@/domain/reports";
@@ -15,7 +15,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       <OrderForm
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
         catalogue={stock.map((p) => ({ id: p.id, name: p.name, qtyPerCarton: p.qtyPerCarton }))}
-        voiceAvailable={sttConfigured()} aiAvailable={getLlmClient() !== null}
+        voiceAvailable={sttConfigured()} aiAvailable={getLlmClient() !== null} visionAvailable={getVisionClient() !== null}
         initialCustomerId={customers.some((c) => c.id === customer) ? customer : undefined}
       />
     </div>
