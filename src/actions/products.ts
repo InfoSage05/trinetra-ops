@@ -4,7 +4,7 @@ import { runAction } from "@/lib/action-result";
 import { ValidationError } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { parseSpreadsheet } from "@/lib/spreadsheet";
-import { createProduct, renameProduct, setProductActive, updateProduct } from "@/domain/products";
+import { createProduct, renameProduct, setCartonSize, setProductActive, updateProduct } from "@/domain/products";
 import { importProducts, mapProductRows } from "@/domain/imports";
 
 const refresh = () => { revalidatePath("/products"); revalidatePath("/inventory"); };
@@ -19,6 +19,10 @@ export async function updateProductAction(input: unknown) {
 
 export async function renameProductAction(input: unknown) {
   return runAction(async () => { const p = await renameProduct(await getSession(), input); refresh(); revalidatePath(`/inventory/${p.id}`); return p; });
+}
+
+export async function setCartonSizeAction(input: unknown) {
+  return runAction(async () => { const p = await setCartonSize(await getSession(), input); refresh(); revalidatePath("/orders"); return p; });
 }
 
 export async function setProductActiveAction(input: unknown) {

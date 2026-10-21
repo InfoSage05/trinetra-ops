@@ -72,3 +72,15 @@ test("owner renames an item to something easier to remember; items without a cod
   await expect(page.locator("li", { hasText: "Rose small pack" })).toBeVisible();
   await expect(page.getByText("E2E Rename Me")).toHaveCount(0);
 });
+
+test("owner sets how many pieces make one carton, right on the stock list", async ({ page }) => {
+  await login(page, E2E_OWNER);
+  await page.goto("/inventory");
+  await page.waitForLoadState("networkidle");
+  const row = page.locator("li", { hasText: "E2E Carton Size Me" });
+  await expect(row).toContainText("50 pcs"); // one piece per carton until told otherwise
+  await row.getByLabel(/Pieces in one carton of E2E Carton Size Me/).fill("12");
+  await row.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved: 1 carton = 12 pcs")).toBeVisible();
+  await expect(row).toContainText("4 cartons + 2 pcs (50 pcs)");
+});

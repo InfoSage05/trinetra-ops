@@ -70,6 +70,17 @@ export async function renameProduct(session: Session | null, rawInput: unknown) 
   return prisma.product.update({ where: { id }, data: { name } });
 }
 
+/**
+ * Sets how many pieces make one carton for this item. Stock is always kept in pieces, so only the way it is shown
+ * (and how cartons typed on new bills and orders turn into pieces) changes. Bills already made keep their own figure.
+ */
+export async function setCartonSize(session: Session | null, rawInput: unknown) {
+  requireRole(session, ["OWNER"]);
+  const { id, qtyPerCarton } = parseInput(z.object({ id: entityId, qtyPerCarton: positiveInt }), rawInput);
+  if (!(await prisma.product.findUnique({ where: { id } }))) throw new NotFoundError("Product");
+  return prisma.product.update({ where: { id }, data: { qtyPerCarton } });
+}
+
 export async function setProductActive(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(z.object({ id: entityId, isActive: z.boolean() }), rawInput);

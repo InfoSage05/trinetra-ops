@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CartonSize } from "@/components/carton-size";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +51,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
           <li key={r.id} className="flex flex-wrap items-center gap-2 p-3">
             <div className="mr-auto">
               <Link href={`/inventory/${r.id}`} className="font-medium underline-offset-2 hover:underline">{r.name}</Link>
-              <p className="text-sm text-muted-foreground">{r.sku ? `${r.sku} · ` : ""}{r.qtyPerCarton} {r.unit} per carton</p>
+              <p className="text-sm text-muted-foreground">{r.sku ? `${r.sku} · ` : ""}<CartonSize key={`${r.id}-${r.qtyPerCarton}`} id={r.id} name={r.name} value={r.qtyPerCarton} unit={r.unit} editable={canAdjust} /></p>
             </div>
             <span className="text-right text-sm font-semibold">{describeStock(r.stock, r.qtyPerCarton)}</span>
             {r.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}

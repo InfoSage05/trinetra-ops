@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "@/lib/db";
-import { createProduct, renameProduct, updateProduct } from "@/domain/products";
+import { createProduct, renameProduct, setCartonSize, updateProduct } from "@/domain/products";
 import { importProducts } from "@/domain/imports";
 import { importOpeningStock, previewOpeningStock, getCurrentStock } from "@/domain/stock";
 import { createBill } from "@/domain/billing";
@@ -67,5 +67,15 @@ describe("items without a code", () => {
     expect(preview.problems[0].message).toContain("No item matches");
     await importOpeningStock(owner, { importBatchId: "batch-2", rows: [rows[0]] });
     expect((await getCurrentStock(prisma, item.id)).toString()).toBe("30");
+  });
+
+  it("carton size can be set on its own, must be a whole number of 1 or more, and only by the owner", async () => {
+    const owner = await makeUser("OWNER");
+    const worker = await makeUser("WORKER");
+    const item = await createProduct(owner, { ...base, name: "Flower box" });
+    expect((await setCartonSize(owner, { id: item.id, qtyPerCarton: "24" })).qtyPerCarton).toBe(24);
+    for (const bad of ["0", "-2", "1.5", "abc", ""]) await expect(setCartonSize(owner, { id: item.id, qtyPerCarton: bad })).rejects.toThrow();
+    await expect(setCartonSize(worker, { id: item.id, qtyPerCarton: "5" })).rejects.toBeInstanceOf(ForbiddenError);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: item.id } })).qtyPerCarton).toBe(24);
   });
 });
