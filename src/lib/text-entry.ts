@@ -102,6 +102,8 @@ export function matchName<T extends { id: string; name: string }>(raw: string, c
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Whole month words only, so "marble" or "decorative" are never read as March or December.
+const MONTH_WORD = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 
 function isoOf(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
@@ -123,16 +125,17 @@ export function extractDueDate(text: string, today: string): { date: string | nu
     return { date: isoOf(ms), rest: `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`.replace(/\s+/g, " ").trim() };
   };
   const monthIndex = (word: string) => MONTHS.indexOf(word.slice(0, 3));
-  const nextOccurrence = (month: number, day: number) => {
+  const nextOccurrence = (month: number, day: number): number | null => {
     const thisYear = new Date(base).getUTCFullYear();
+    if (day < 1 || day > new Date(Date.UTC(thisYear, month + 1, 0)).getUTCDate()) return null; // no such day, e.g. 31 Feb
     const candidate = Date.UTC(thisYear, month, day);
     return candidate < base ? Date.UTC(thisYear + 1, month, day) : candidate; // "5 nov" said in December means next year
   };
 
   return (
     take(/\b(\d{4})-(\d{2})-(\d{2})\b/, (m) => { const ms = Date.parse(`${m[0]}T00:00:00Z`); return Number.isNaN(ms) ? null : ms; }) ??
-    take(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/, (m) => nextOccurrence(monthIndex(m[2]), Number(m[1]))) ??
-    take(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\b/, (m) => nextOccurrence(monthIndex(m[1]), Number(m[2]))) ??
+    take(new RegExp(String.raw`\b(\d{1,2})(?:st|nd|rd|th)?\s+${MONTH_WORD}\b`), (m) => nextOccurrence(monthIndex(m[2]), Number(m[1]))) ??
+    take(new RegExp(String.raw`\b${MONTH_WORD}\s+(\d{1,2})(?:st|nd|rd|th)?\b`), (m) => nextOccurrence(monthIndex(m[1]), Number(m[2]))) ??
     take(/\b(?:in\s+)?(\d{1,2})\s+(?:days?|din)(?:\s+(?:mein|me))?\b/, (m) => base + Number(m[1]) * DAY_MS) ??
     take(/\bnext\s+week\b/, () => base + 7 * DAY_MS) ??
     take(/\b(?:parso|day\s+after\s+tomorrow)\b/, () => base + 2 * DAY_MS) ??

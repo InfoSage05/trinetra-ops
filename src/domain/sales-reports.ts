@@ -129,7 +129,7 @@ export async function getStockMovementReport(session: Session | null, rawInput: 
 
 /** A spreadsheet opens "=cmd..." or "+1+1" as a formula; text cells starting that way get a leading apostrophe. */
 function safeCell(value: string): string {
-  if (/^-?\d+(\.\d+)?$/.test(value)) return value; // a plain number (including a negative one) is not a formula
+  if (/^(-?\d+(\.\d+)?|-)$/.test(value)) return value; // a plain number (including a negative one) is not a formula
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 

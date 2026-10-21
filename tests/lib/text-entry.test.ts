@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { extractJson } from "@/lib/llm";
+import { toPieces } from "@/lib/cartons";
 import { matchName, parseQuantityLines } from "@/lib/text-entry";
 
 describe("parseQuantityLines", () => {
@@ -38,5 +40,22 @@ describe("matchName", () => {
   });
   it("reports unknown items as unmatched", () => {
     expect(matchName("lantern", catalogue).status).toBe("UNMATCHED");
+  });
+});
+
+describe("extractJson", () => {
+  it("finds the data even with bracketed words or a code fence around it", () => {
+    expect(extractJson('Here is [the result]: {"items":[{"name":"rose"}]} hope that helps')).toEqual({ items: [{ name: "rose" }] });
+    expect(extractJson(["```json", "[1, 2]", "```"].join("\n"))).toEqual([1, 2]);
+    expect(() => extractJson("no data here")).toThrow();
+    expect(() => extractJson("broken [ and { only")).toThrow();
+  });
+});
+
+describe("toPieces", () => {
+  it("treats half-typed text as zero instead of crashing the screen", () => {
+    expect(toPieces("2", "3", 12)).toBe("27");
+    expect(toPieces("abc", "", 12)).toBe("0");
+    expect(toPieces("1,5", "", 12)).toBe("0");
   });
 });

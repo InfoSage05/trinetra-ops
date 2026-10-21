@@ -43,6 +43,20 @@ describe("orders", () => {
     expect(await prisma.order.count()).toBe(1);
   });
 
+  it("merges the same item written twice into one line, so delivery is not counted twice", async () => {
+    const { owner, customer, rose } = await world();
+    const order = await createOrder(owner, {
+      customerId: customer.id, dueDate: isoIn(3), idempotencyKey: "order-key-0009",
+      lines: [{ productId: rose.id, cartons: "5" }, { productId: rose.id, cartons: "5" }],
+    });
+    expect(order.lines).toHaveLength(1);
+    expect(order.lines[0].quantity.toString()).toBe("240");
+    await createBill(owner, { customerId: customer.id, placeOfSupply: "21", idempotencyKey: "order-bill-0009", orderId: order.id, lines: [{ productId: rose.id, cartons: "3" }] });
+    const view = await getOrder(owner, order.id);
+    expect(view.status).toBe("PARTIAL");
+    expect(view.lines[0].outstanding.toString()).toBe("168"); // 240 ordered, 72 delivered
+  });
+
   it("rejects past dates, empty orders and non-owners", async () => {
     const { owner, worker, customer, rose } = await world();
     const base = { customerId: customer.id, idempotencyKey: "order-key-0002", lines: [{ productId: rose.id, cartons: "1" }] };
@@ -116,6 +130,12 @@ describe("extractDueDate", () => {
     expect(extractDueDate("rose 1 carton 2026-12-01", today).date).toBe("2026-12-01");
     expect(extractDueDate("a date in 5 Jan", today).date).toBe("2027-01-05");
     expect(extractDueDate("rose 3 carton", today).date).toBeNull();
+  });
+  it("only reads whole month words, never the start of an item name", () => {
+    expect(extractDueDate("Sharma, 5 marble candle, 3 rose", today)).toEqual({ date: null, rest: "Sharma, 5 marble candle, 3 rose" });
+    expect(extractDueDate("2 decorative, 4 novelty", today).date).toBeNull();
+    expect(extractDueDate("5 march rose", today).date).toBe("2027-03-05");
+    expect(extractDueDate("31 feb rose", today).date).toBeNull();
   });
 });
 

@@ -51,7 +51,7 @@ export async function createOrder(session: Session | null, rawInput: unknown) {
   const products = await prisma.product.findMany({ where: { id: { in: [...new Set(input.lines.map((l) => l.productId))] } } });
   const byId = new Map(products.map((p) => [p.id, p]));
 
-  const lines = input.lines.map((line, index) => {
+  const priced = input.lines.map((line, index) => {
     const product = byId.get(line.productId);
     if (!product) throw new NotFoundError(`Item on line ${index + 1}`);
     if (!product.isActive) throw new DomainError("PRODUCT_INACTIVE", `${product.name} is marked inactive.`);
@@ -59,8 +59,12 @@ export async function createOrder(session: Session | null, rawInput: unknown) {
       ? D(line.quantity)
       : D(line.cartons ?? 0).times(product.qtyPerCarton).plus(D(line.loosePieces ?? 0));
     if (!pieces.greaterThan(0)) throw new ValidationError(`Line ${index + 1} (${product.name}): enter at least 1 carton or piece.`);
-    return { lineNo: index + 1, productId: product.id, quantity: toFixed2(pieces) };
+    return { productId: product.id, pieces };
   });
+  // The same item written twice becomes one line, so delivered quantity (tracked per item) is never counted twice.
+  const merged = new Map<string, Decimal>();
+  for (const l of priced) merged.set(l.productId, (merged.get(l.productId) ?? ZERO).plus(l.pieces));
+  const lines = [...merged.entries()].map(([productId, pieces], i) => ({ lineNo: i + 1, productId, quantity: toFixed2(pieces) }));
 
   const { year, month, day } = istDateParts(new Date());
   const today = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;

@@ -93,6 +93,9 @@ describe("applyStockProposal", () => {
     const apply = { kind: "COUNT", channel: "SHEET", extractor: "RULES", sourceText: "", lines: [{ productId: rose.id, pieces: "55" }], idempotencyKey: "apply-key-0002" };
     expect(await applyStockProposal(worker, apply)).toMatchObject({ saved: 1, skipped: [] });
     expect((await getCurrentStock(prisma, rose.id)).toString()).toBe("10"); // not changed until the owner approves
+    const waiting = await prisma.stockCount.findFirstOrThrow({ where: { productId: rose.id } });
+    expect(waiting.actorType).toBe("AGENT");
+    expect(waiting.sourceMetadata).toMatchObject({ via: "ai-assistant", channel: "SHEET", approvedBy: worker.userId });
     const again = await applyStockProposal(worker, { ...apply, idempotencyKey: "apply-key-0003" });
     expect(again.saved).toBe(0);
     expect(again.skipped).toHaveLength(1);

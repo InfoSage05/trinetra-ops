@@ -8,11 +8,15 @@ export function splitCartons(pieces: number | string, qtyPerCarton: number): { c
   return { cartons: Math.floor(total / per), pieces: total % per };
 }
 
-/** Cartons (may be fractional) + loose pieces → total pieces, as a string. Empty fields count as 0. */
+/** Cartons (may be fractional) + loose pieces → total pieces, as a string. Empty or unreadable fields count as 0. */
 export function toPieces(cartons: string, loosePieces: string, qtyPerCarton: number): string {
-  const c = cartons.trim() === "" ? new Decimal(0) : D(cartons);
-  const p = loosePieces.trim() === "" ? new Decimal(0) : D(loosePieces);
-  return c.times(qtyPerCarton).plus(p).toString();
+  try {
+    const c = cartons.trim() === "" ? new Decimal(0) : D(cartons);
+    const p = loosePieces.trim() === "" ? new Decimal(0) : D(loosePieces);
+    return c.times(qtyPerCarton).plus(p).toString();
+  } catch {
+    return "0"; // half-typed text such as "1," is shown as 0 while typing; the server rejects it if it is submitted
+  }
 }
 
 /** "3 cartons + 5 pcs (41 pcs)" — how stock is shown to people who think in cartons. */

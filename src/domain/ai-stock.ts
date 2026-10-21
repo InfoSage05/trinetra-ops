@@ -212,7 +212,7 @@ export async function applyStockProposal(session: Session | null, rawInput: unkn
   let saved = 0;
   for (const line of input.lines) {
     try {
-      await submitStockCount(session, { productId: line.productId, countedQuantity: line.pieces, note: `From ${input.channel.toLowerCase()} upload` });
+      await submitStockCount(session, { productId: line.productId, countedQuantity: line.pieces, note: `From ${input.channel.toLowerCase()} upload` }, { sourceMetadata: provenance });
       saved += 1;
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;

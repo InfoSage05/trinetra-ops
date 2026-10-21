@@ -26,6 +26,8 @@ test("owner sees reports and downloads the GST exports; a worker cannot", async 
   expect((await owner.request.get("/api/reports/hsn-summary?from=2020-01-01&to=2020-01-31")).status()).toBe(400); // nothing to export
   expect((await owner.request.get("/api/reports/nope?from=2020-01-01&to=2020-01-31")).status()).toBe(404);
 
+  expect((await owner.request.get("/api/reports/toString?from=2020-01-01&to=2020-01-31")).status()).toBe(404); // only real report names
+
   const worker = await (await browser.newContext({ viewport: { width: 412, height: 915 } })).newPage();
   await login(worker, E2E_WORKER);
   expect((await worker.request.get(`/api/reports/sales-register?${range}`)).status()).toBe(403);

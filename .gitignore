@@ -52,8 +52,7 @@ next-env.d.ts
 .pgdata.log
 .dev.log
 
-"~$*"
-"new in voice.xlsx"
+new in voice.xlsx
 
 # Excel lock files
 ~$*

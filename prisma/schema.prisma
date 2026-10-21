@@ -322,6 +322,8 @@ model StockCount {
   appliedDelta     Decimal?  @db.Decimal(12, 2)
   discardedBy      String?
   discardedAt      DateTime?
+  actorType        ActorType @default(HUMAN)
+  sourceMetadata   Json?
 
   @@index([productId])
   @@map("stock_counts")

@@ -15,7 +15,7 @@ const EXPORTS = {
 /** CSV downloads for the accountant. Owner only; the domain function checks the role and the dates. */
 export async function GET(request: Request, { params }: { params: Promise<{ kind: string }> }) {
   const { kind } = await params;
-  if (!(kind in EXPORTS)) return new Response("Unknown report.", { status: 404 });
+  if (!Object.hasOwn(EXPORTS, kind)) return new Response("Unknown report.", { status: 404 });
   const url = new URL(request.url);
   const range = { from: url.searchParams.get("from") ?? "", to: url.searchParams.get("to") ?? "" };
   try {

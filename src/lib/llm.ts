@@ -55,14 +55,19 @@ export function getLlmClient(): LlmClient | null {
 
 /** Pulls the first JSON value out of a model answer (models like to wrap it in prose or a code fence). */
 export function extractJson(text: string): unknown {
-  const start = text.search(/[[{]/);
-  if (start < 0) throw new DomainError("AI_BAD_OUTPUT", "The AI answer did not contain any data.");
-  const closer = text[start] === "{" ? "}" : "]";
-  const end = text.lastIndexOf(closer);
-  if (end <= start) throw new DomainError("AI_BAD_OUTPUT", "The AI answer was cut off.");
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    throw new DomainError("AI_BAD_OUTPUT", "The AI answer was not valid data.");
+  let sawBracket = false;
+  // Try each opening bracket in turn, so a bracketed word in the surrounding prose ("[the result]") is skipped.
+  for (const opener of text.matchAll(/[[{]/g)) {
+    const start = opener.index;
+    sawBracket = true;
+    const closer = text[start] === "{" ? "}" : "]";
+    for (let end = text.lastIndexOf(closer); end > start; end = text.lastIndexOf(closer, end - 1)) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        // try a shorter slice
+      }
+    }
   }
+  throw new DomainError("AI_BAD_OUTPUT", sawBracket ? "The AI answer was not valid data." : "The AI answer did not contain any data.");
 }

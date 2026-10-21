@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import type { StockCount } from "@/generated/prisma/client";
+import type { Prisma, StockCount } from "@/generated/prisma/client";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError } from "@/lib/errors";
 import { D, formatQuantity, toFixed2 } from "@/lib/money";
@@ -9,7 +9,10 @@ import { getCurrentStock, writeLedgerEntry } from "@/domain/stock";
 
 const ALREADY_RESOLVED = () => new DomainError("ALREADY_RESOLVED", "This count has already been approved or discarded.");
 
-export async function submitStockCount(session: Session | null, rawInput: unknown): Promise<StockCount> {
+/** `provenance` is for trusted callers only (the AI assistant after a person approved); it is never read from user input. */
+export async function submitStockCount(
+  session: Session | null, rawInput: unknown, provenance?: { sourceMetadata: Prisma.InputJsonValue }
+): Promise<StockCount> {
   requireRole(session, ["OWNER", "WORKER"]);
   const input = parseInput(z.object({ productId: entityId, countedQuantity: nonNegativeQuantity, note: optionalText(300) }), rawInput);
   const product = await prisma.product.findUnique({ where: { id: input.productId } });
@@ -24,6 +27,7 @@ export async function submitStockCount(session: Session | null, rawInput: unknow
     data: {
       productId: product.id, countedQuantity: toFixed2(input.countedQuantity), expectedQuantity: toFixed2(expected),
       note: input.note ?? null, countedBy: session.userId,
+      ...(provenance ? { actorType: "AGENT" as const, sourceMetadata: provenance.sourceMetadata } : {}),
     },
   });
 }
