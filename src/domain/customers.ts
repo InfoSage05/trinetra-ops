@@ -52,6 +52,13 @@ export async function setCustomerActive(session: Session | null, rawInput: unkno
   return prisma.customer.update({ where: { id: input.id }, data: { isActive: input.isActive } });
 }
 
+export async function getCustomer(session: Session | null, id: string) {
+  requireRole(session, ["OWNER"]);
+  const customer = await prisma.customer.findUnique({ where: { id } });
+  if (!customer) throw new NotFoundError("Customer");
+  return customer;
+}
+
 export async function searchCustomers(session: Session | null, rawInput: unknown = {}) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(

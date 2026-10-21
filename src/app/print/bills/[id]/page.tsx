@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { invoiceQrCodes } from "@/lib/qr";
 import { getInvoiceView } from "@/domain/invoice-view";
 import { InvoiceDocument } from "@/components/invoice-document";
+import { InvoiceSheet } from "@/components/invoice-sheet";
 import { AutoPrint } from "@/components/auto-print";
 
 export default async function PrintBillPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ format?: string }> }) {
@@ -21,8 +22,10 @@ export default async function PrintBillPage({ params, searchParams }: { params: 
   const variant = format === "thermal" ? "thermal" : "a4";
   return (
     <>
-      <style>{variant === "thermal" ? "@page { size: 80mm auto; margin: 3mm; } body { background: white; }" : "@page { size: A4; margin: 10mm; } body { background: white; }"}</style>
-      <InvoiceDocument view={view} qrs={await invoiceQrCodes(view)} variant={variant} />
+      <style>{variant === "thermal" ? "@page { size: 80mm auto; margin: 3mm; } body { background: white; }" : "@page { size: A4; margin: 8mm; } body { background: white; }"}</style>
+      {variant === "thermal"
+        ? <InvoiceDocument view={view} qrs={await invoiceQrCodes(view)} variant="thermal" />
+        : <InvoiceSheet view={view} qrs={await invoiceQrCodes(view)} />}
       <AutoPrint />
     </>
   );

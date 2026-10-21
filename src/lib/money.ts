@@ -36,6 +36,13 @@ export function formatINR(value: DecimalInput): string {
   return inr.format(round2(value).toNumber());
 }
 
+const plain = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Amount for table cells: Indian digit grouping, always 2 decimals, no currency sign. */
+export function formatAmount(value: DecimalInput): string {
+  return plain.format(round2(value).toNumber());
+}
+
 export function formatQuantity(value: DecimalInput): string {
   return round2(value).toString(); // "12.5", "12", "-3"
 }

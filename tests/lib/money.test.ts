@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { D, round2, sumDecimals, roundToRupee, formatINR, amountInWords, toFixed2 } from "@/lib/money";
+import { D, round2, sumDecimals, roundToRupee, formatINR, formatAmount, amountInWords, toFixed2 } from "@/lib/money";
 
 describe("money", () => {
   it("rounds half up to 2 dp", () => {
@@ -20,6 +20,10 @@ describe("money", () => {
   });
   it("formats Indian currency with lakh grouping", () => {
     expect(formatINR("123456.5")).toBe("₹1,23,456.50");
+  });
+  it("formats plain amounts (no rupee sign) with lakh grouping and always 2 decimals", () => {
+    expect(formatAmount("123456.5")).toBe("1,23,456.50");
+    expect(formatAmount("0")).toBe("0.00");
   });
   it("writes amounts in Indian words", () => {
     expect(amountInWords("1180")).toBe("One Thousand One Hundred Eighty Rupees Only");

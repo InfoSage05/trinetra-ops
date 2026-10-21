@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/field";
 import { saveBusinessProfileAction } from "@/actions/settings";
 import { callAction } from "@/lib/client/call-action";
+import { TRINETRA_DEFAULTS as D0 } from "@/lib/trinetra-defaults";
 
 type Profile = {
   legalName: string; tradeName: string | null; gstin: string; addressLine1: string; addressLine2: string | null;
@@ -19,10 +20,10 @@ type Profile = {
 export function BusinessProfileForm({ initial }: { initial: Profile }) {
   const router = useRouter();
   const [f, setF] = useState({
-    legalName: initial?.legalName ?? "", tradeName: initial?.tradeName ?? "", gstin: initial?.gstin ?? "",
-    addressLine1: initial?.addressLine1 ?? "", addressLine2: initial?.addressLine2 ?? "", city: initial?.city ?? "",
-    pincode: initial?.pincode ?? "", phone: initial?.phone ?? "", email: initial?.email ?? "", upiId: initial?.upiId ?? "",
-    bankDetails: initial?.bankDetails ?? "", invoiceTerms: initial?.invoiceTerms ?? "", einvoicingApplicable: initial?.einvoicingApplicable ?? false,
+    legalName: initial?.legalName ?? D0.legalName, tradeName: initial?.tradeName ?? "", gstin: initial?.gstin ?? D0.gstin,
+    addressLine1: initial?.addressLine1 ?? D0.addressLine1, addressLine2: initial?.addressLine2 ?? "", city: initial?.city ?? D0.city,
+    pincode: initial?.pincode ?? D0.pincode, phone: initial?.phone ?? "", email: initial?.email ?? "", upiId: initial?.upiId ?? "",
+    bankDetails: initial?.bankDetails ?? D0.bankDetails, invoiceTerms: initial?.invoiceTerms ?? D0.invoiceTerms, einvoicingApplicable: initial?.einvoicingApplicable ?? false,
   });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
@@ -33,7 +34,8 @@ export function BusinessProfileForm({ initial }: { initial: Profile }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle>Business details (printed on every invoice)</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Business details (printed on every invoice)</CardTitle>
+        {!initial && <p className="text-sm text-muted-foreground">Pre-filled from your invoice template. Check every field (especially the GST number and phone), then save.</p>}</CardHeader>
       <CardContent>
         <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
           <Field id="legalName" label="Legal name" value={f.legalName} onChange={set("legalName")} required />

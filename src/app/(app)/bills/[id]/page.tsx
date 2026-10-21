@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { getSession } from "@/lib/session";
 import { invoiceQrCodes } from "@/lib/qr";
 import { getInvoiceView } from "@/domain/invoice-view";
-import { InvoiceDocument } from "@/components/invoice-document";
+import { InvoiceSheet } from "@/components/invoice-sheet";
 import { BillActions } from "@/components/bill-actions";
 
 export default async function BillPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +20,7 @@ export default async function BillPage({ params }: { params: Promise<{ id: strin
     <div className="space-y-4">
       <BillActions view={view} />
       <div className="overflow-x-auto rounded-md border bg-white">
-        <InvoiceDocument view={view} qrs={await invoiceQrCodes(view)} variant="a4" />
+        <InvoiceSheet view={view} qrs={await invoiceQrCodes(view)} />
       </div>
     </div>
   );

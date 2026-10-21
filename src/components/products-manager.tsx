@@ -10,8 +10,8 @@ import { createProductAction, importProductsAction, setProductActiveAction, upda
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
 
-type Product = { id: string; sku: string; name: string; unit: string; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
-const EMPTY = { sku: "", name: "", unit: "pcs", hsnCode: "", unitPrice: "", gstRate: "", reorderLevel: "0" };
+type Product = { id: string; sku: string; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
+const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", gstRate: "", reorderLevel: "0" };
 type Editing = typeof EMPTY & { id?: string };
 type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate: number; toUpdate: number; created: number; updated: number };
 
@@ -56,9 +56,9 @@ export function ProductsManager({ products }: { products: Product[] }) {
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
               <p className="font-medium">{p.name} {!p.isActive && <Badge variant="secondary">Inactive</Badge>}</p>
-              <p className="text-sm text-muted-foreground">{p.sku} · HSN {p.hsnCode} · GST {p.gstRate}% · {formatINR(p.unitPrice)}/{p.unit}</p>
+              <p className="text-sm text-muted-foreground">{p.sku} · {p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · {formatINR(p.unitPrice)}/{p.unit}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p })}>Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
             <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setProductActiveAction({ id: p.id, isActive: !p.isActive }))) router.refresh(); }}>
               {p.isActive ? "Deactivate" : "Activate"}
             </Button>
@@ -76,6 +76,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
               <Field id="name" label="Name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
               <Field id="price" label="Price (before GST)" inputMode="decimal" value={editing.unitPrice} onChange={(e) => setEditing({ ...editing, unitPrice: e.target.value })} />
               <Field id="unit" label="Unit" value={editing.unit} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} />
+              <Field id="qpc" label="Pieces in one carton" inputMode="numeric" value={editing.qtyPerCarton} onChange={(e) => setEditing({ ...editing, qtyPerCarton: e.target.value })} hint="Different for each item, e.g. 12 for birthday candles, 40 for masjid candles" />
               <Field id="hsn" label="HSN code" inputMode="numeric" value={editing.hsnCode} onChange={(e) => setEditing({ ...editing, hsnCode: e.target.value })} />
               <Field id="gst" label="GST %" inputMode="decimal" value={editing.gstRate} onChange={(e) => setEditing({ ...editing, gstRate: e.target.value })} hint="Confirm with your CA" />
               <Field id="reorder" label="Warn when stock falls to" inputMode="decimal" value={editing.reorderLevel} onChange={(e) => setEditing({ ...editing, reorderLevel: e.target.value })} />
@@ -88,7 +89,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
       <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) { setPreview(null); setFile(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Import products from Excel</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">First row must be headings: <b>SKU, Name, HSN, GST %, Price</b> (optional: Unit, Reorder level). Existing SKUs are updated.</p>
+          <p className="text-sm text-muted-foreground">First row must be headings: <b>SKU, Name, HSN, GST %, Price</b> (optional: Unit, Qty per carton, Reorder level). Existing SKUs are updated.</p>
           <Input type="file" accept=".xlsx,.csv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} />
           {preview && (
             <div className="space-y-2 text-sm">

@@ -9,24 +9,29 @@ import { approveStockCountAction, discardStockCountAction, submitStockCountActio
 import { callAction } from "@/lib/client/call-action";
 import { formatQuantity } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
+import { toPieces } from "@/lib/cartons";
 
-type Item = { id: string; name: string; sku: string };
+type Item = { id: string; name: string; sku: string; qtyPerCarton: number };
 type Pending = { id: string; productName: string; countedQuantity: string; expectedQuantity: string; delta: string; countedAt: Date; movementsSinceCount: number; note: string | null };
 
 export function CountsManager({ items, pending, isOwner }: { items: Item[]; pending: Pending[]; isOwner: boolean }) {
   const router = useRouter();
   const [productId, setProductId] = useState("");
-  const [counted, setCounted] = useState("");
+  const [cartonsCounted, setCartonsCounted] = useState("");
+  const [looseCounted, setLooseCounted] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const selected = items.find((i) => i.id === productId);
+  const countedPieces = toPieces(cartonsCounted, looseCounted, selected?.qtyPerCarton ?? 1);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
-    const ok = await callAction(submitStockCountAction({ productId, countedQuantity: counted, note }), { success: isOwner ? "Count saved. Approve it below." : "Count sent to the owner" });
+    const ok = await callAction(submitStockCountAction({ productId, countedQuantity: countedPieces, note }), { success: isOwner ? "Count saved. Approve it below." : "Count sent to the owner" });
     setBusy(false);
-    if (ok) { setCounted(""); setNote(""); router.refresh(); }
+    if (ok) { setCartonsCounted(""); setLooseCounted(""); setNote(""); router.refresh(); }
   }
 
   return (
@@ -43,9 +48,13 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
                 {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.sku})</option>)}
               </select>
             </div>
-            <div className="space-y-1"><Label htmlFor="counted">Counted quantity</Label><Input id="counted" className="h-14 text-2xl" inputMode="decimal" value={counted} onChange={(e) => setCounted(e.target.value)} required /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1"><Label htmlFor="cartonsCounted">Full cartons counted</Label><Input id="cartonsCounted" className="h-14 text-2xl" inputMode="decimal" value={cartonsCounted} onChange={(e) => setCartonsCounted(e.target.value)} /></div>
+              <div className="space-y-1"><Label htmlFor="looseCounted">Loose pieces counted</Label><Input id="looseCounted" className="h-14 text-2xl" inputMode="decimal" value={looseCounted} onChange={(e) => setLooseCounted(e.target.value)} /></div>
+            </div>
+            {selected && <p className="text-sm">1 carton = {selected.qtyPerCarton} pieces. Total counted: <b>{countedPieces}</b> pieces.</p>}
             <div className="space-y-1"><Label htmlFor="note">Note (optional)</Label><Input id="note" className="h-11" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-            <Button type="submit" size="lg" className="h-12" disabled={busy}>Save count</Button>
+            <Button type="submit" size="lg" className="h-12" disabled={busy || !productId}>Save count</Button>
           </form>
         </CardContent>
       </Card>
