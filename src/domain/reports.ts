@@ -5,7 +5,8 @@ import { requireRole, type Session } from "@/lib/auth";
 import { D, ZERO, sumDecimals } from "@/lib/money";
 import { istDayRange } from "@/lib/time";
 import { parseInput } from "@/lib/validation";
-import { getStockLevels } from "@/domain/stock";
+import { NotFoundError } from "@/lib/errors";
+import { getCurrentStock, getStockLevels } from "@/domain/stock";
 import { getPaymentSummaries, type PaymentStatus } from "@/domain/payments";
 
 export type StockStatus = "NEGATIVE" | "LOW" | "OK";
@@ -111,4 +112,46 @@ export async function listBills(session: Session | null, rawInput: unknown = {})
     .map((b) => ({ ...b, payment: summaries.get(b.id)! }))
     .filter((b) => matches(b.payment.status))
     .slice(0, input.take);
+}
+
+/** One item: stock now, and its recent stock movements (what came in, what went out and why). Workers see no money. */
+export async function getProductDetail(session: Session | null, id: string) {
+  requireRole(session, ["OWNER", "WORKER"]);
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) throw new NotFoundError("Item");
+  const [stock, movements, soldAgg] = await Promise.all([
+    getCurrentStock(prisma, id),
+    prisma.stockLedgerEntry.findMany({ where: { productId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
+    session?.role === "OWNER"
+      ? prisma.billLineItem.findMany({ where: { productId: id }, orderBy: { bill: { billDate: "desc" } }, take: 10, select: { quantity: true, bill: { select: { id: true, invoiceNumber: true, billDate: true, customerName: true } } } })
+      : Promise.resolve([]),
+  ]);
+  const reorderLevel = D(product.reorderLevel);
+  const status: StockStatus = stock.isNegative() ? "NEGATIVE" : reorderLevel.greaterThan(0) && stock.lessThanOrEqualTo(reorderLevel) ? "LOW" : "OK";
+  return {
+    id: product.id, sku: product.sku, name: product.name, unit: product.unit, qtyPerCarton: product.qtyPerCarton,
+    reorderLevel, stock, status,
+    unitPrice: session?.role === "OWNER" ? product.unitPrice : null,
+    movements: movements.map((m) => ({ id: m.id, type: m.type, quantityDelta: m.quantityDelta, reason: m.reason, actorType: m.actorType, createdAt: m.createdAt })),
+    recentSales: soldAgg.map((s) => ({ billId: s.bill.id, invoiceNumber: s.bill.invoiceNumber, billDate: s.bill.billDate, customerName: s.bill.customerName, quantity: s.quantity })),
+  };
+}
+
+/** One customer: details, what they have been billed and what they still owe. */
+export async function getCustomerDetail(session: Session | null, id: string) {
+  requireRole(session, ["OWNER"]);
+  const customer = await prisma.customer.findUnique({ where: { id } });
+  if (!customer) throw new NotFoundError("Customer");
+  const bills = await prisma.bill.findMany({
+    where: { customerId: id }, orderBy: { billDate: "desc" },
+    select: { id: true, invoiceNumber: true, billDate: true, grandTotal: true },
+  });
+  const summaries = await getPaymentSummaries(prisma, bills.map((b) => b.id));
+  const rows = bills.map((b) => ({ ...b, payment: summaries.get(b.id)! }));
+  return {
+    customer,
+    bills: rows,
+    billedTotal: sumDecimals(rows.map((b) => b.grandTotal)),
+    totalDue: sumDecimals(rows.map((b) => b.payment.amountDue.greaterThan(0) ? b.payment.amountDue : ZERO)),
+  };
 }

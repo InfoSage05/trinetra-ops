@@ -25,7 +25,7 @@ export function OwnerDashboard({ data }: { data: Data }) {
           <CardHeader><CardTitle>Needs attention</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.negativeStock.map((s) => (
-              <p key={s.id}><Badge variant="destructive">Oversold</Badge> {s.name}: stock {formatQuantity(s.stock)}. Record production or count it.</p>
+              <p key={s.id}><Badge variant="destructive">Oversold</Badge> <Link className="underline" href={`/inventory/${s.id}`}>{s.name}</Link>: stock {formatQuantity(s.stock)}. Record production or count it.</p>
             ))}
             {data.irpIssues.map((j) => (
               <p key={j.id}><Badge variant="destructive">e-Invoice</Badge> {j.documentNumber}: {j.status.toLowerCase()} {j.lastError ? `(${j.lastError})` : ""}{" "}
@@ -42,7 +42,7 @@ export function OwnerDashboard({ data }: { data: Data }) {
         <Card>
           <CardHeader><CardTitle>Running low: make more</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {data.lowStock.map((s) => <p key={s.id}>{s.name}: {formatQuantity(s.stock)} left (warn at {formatQuantity(s.reorderLevel)})</p>)}
+            {data.lowStock.map((s) => <p key={s.id}><Link className="underline" href={`/inventory/${s.id}`}>{s.name}</Link>: {formatQuantity(s.stock)} left (warn at {formatQuantity(s.reorderLevel)})</p>)}
           </CardContent>
         </Card>
       )}
@@ -51,7 +51,7 @@ export function OwnerDashboard({ data }: { data: Data }) {
         <Card>
           <CardHeader><CardTitle>Who owes money</CardTitle></CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {data.topDues.map((d) => <p key={d.customerId} className="flex justify-between"><span>{d.customerName}</span><span>{formatINR(d.amountDue)}</span></p>)}
+            {data.topDues.map((d) => <p key={d.customerId} className="flex justify-between"><Link className="underline" href={`/customers/${d.customerId}`}>{d.customerName}</Link><span>{formatINR(d.amountDue)}</span></p>)}
           </CardContent>
         </Card>
       )}

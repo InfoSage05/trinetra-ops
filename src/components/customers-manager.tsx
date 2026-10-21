@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ export function CustomersManager({ customers }: { customers: ListedCustomer[] })
         {visible.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
-              <p className="font-medium">{c.name} {!c.isActive && <span className="text-sm text-muted-foreground">(hidden)</span>}</p>
+              <Link href={`/customers/${c.id}`} className="font-medium underline-offset-2 hover:underline">{c.name}</Link>{!c.isActive && <span className="ml-1 text-sm text-muted-foreground">(hidden)</span>}
               <p className="text-sm text-muted-foreground">{[c.phone, c.gstin ?? "Unregistered", stateName(c.stateCode)].filter(Boolean).join(" · ")}</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => setEditing({ id: c.id, name: c.name, phone: c.phone ?? "", gstin: c.gstin ?? "", billingAddress: c.billingAddress, stateCode: c.stateCode })}>Edit</Button>

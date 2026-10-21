@@ -76,7 +76,7 @@ export async function getInvoiceView(session: Session | null, billId: string) {
       phone: profile?.phone ?? null, email: profile?.email ?? null,
     },
     customer: {
-      name: bill.customerName, gstin: bill.customerGstin, address: bill.customerAddress, phone: bill.customerPhone,
+      id: bill.customerId, name: bill.customerName, gstin: bill.customerGstin, address: bill.customerAddress, phone: bill.customerPhone,
       stateLabel: `${stateName(bill.customerStateCode)} (${bill.customerStateCode})`,
     },
     placeOfSupplyLabel: `${stateName(bill.placeOfSupply)} (${bill.placeOfSupply})`,
