@@ -81,6 +81,26 @@ export async function setCartonSize(session: Session | null, rawInput: unknown) 
   return prisma.product.update({ where: { id }, data: { qtyPerCarton } });
 }
 
+/**
+ * Changes the rate (price before GST) and/or the name of one item in a single step, for the quick-edit table.
+ * Only future bills use the new rate; bills already made keep the rate they were printed with.
+ */
+export async function quickEditProduct(session: Session | null, rawInput: unknown) {
+  requireRole(session, ["OWNER"]);
+  const input = parseInput(
+    z.object({ id: entityId, name: requiredText("Name", 120).transform(tidyName).optional(), unitPrice: money.optional() })
+      .refine((v) => v.name !== undefined || v.unitPrice !== undefined, "Nothing to change."),
+    rawInput
+  );
+  const current = await prisma.product.findUnique({ where: { id: input.id } });
+  if (!current) throw new NotFoundError("Product");
+  if (input.name !== undefined && input.name !== current.name) await assertNameFree(input.name, input.id);
+  return prisma.product.update({
+    where: { id: input.id },
+    data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.unitPrice !== undefined ? { unitPrice: toFixed2(input.unitPrice) } : {}) },
+  });
+}
+
 export async function setProductActive(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(z.object({ id: entityId, isActive: z.boolean() }), rawInput);

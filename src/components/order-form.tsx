@@ -36,6 +36,7 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
   const [busy, setBusy] = useState(false);
   const [photoCustomer, setPhotoCustomer] = useState(initialCustomerId);
   const photoInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
   const [key, renewKey] = useIdempotencyKey();
 
   async function check() {
@@ -49,15 +50,18 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
     });
   }
 
-  async function readPhoto(file: File | undefined) {
-    if (!file) return;
+  async function readPhotos(files: FileList | null) {
+    const chosen = Array.from(files ?? []);
+    if (chosen.length === 0) return;
+    if (chosen.length > 5) return toast.error("Choose at most 5 photos at a time.");
     setBusy(true);
     const form = new FormData();
-    form.set("image", await shrinkImage(file));
+    for (const file of chosen) form.append("image", await shrinkImage(file));
     if (photoCustomer) form.set("customerId", photoCustomer);
     const p = await callAction(proposeOrderFromImageAction(form));
     setBusy(false);
     if (photoInput.current) photoInput.current.value = "";
+    if (cameraInput.current) cameraInput.current.value = "";
     if (!p) return;
     setDraft({
       channel: "IMAGE", extractor: p.extractor, model: p.model, sourceText: p.sourceText, notes: p.notes,
@@ -112,8 +116,14 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" aria-label="Order photo" disabled={busy} onChange={(e) => readPhoto(e.target.files?.[0])} className="block w-full text-sm" />
-              {busy && <p className="text-sm text-muted-foreground">Reading the photo…</p>}
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" className="h-12" disabled={busy} onClick={() => cameraInput.current?.click()}>Take a photo</Button>
+                <Button type="button" variant="outline" className="h-12" disabled={busy} onClick={() => photoInput.current?.click()}>Insert images</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">&quot;Insert images&quot; lets you pick pictures already saved on this phone or computer. You can pick up to 5 pages of the same order.</p>
+              <input ref={cameraInput} type="file" hidden accept="image/png,image/jpeg,image/webp" capture="environment" aria-label="Take order photo" onChange={(e) => readPhotos(e.target.files)} />
+              <input ref={photoInput} type="file" hidden multiple accept="image/png,image/jpeg,image/webp" aria-label="Insert order images" onChange={(e) => readPhotos(e.target.files)} />
+              {busy && <p className="text-sm text-muted-foreground">Reading…</p>}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">Photo reading is not switched on yet. It needs an AI model that can see pictures; see <b>docs/keys.md</b> (LLM_VISION_MODEL).</p>

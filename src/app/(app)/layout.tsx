@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { AppNav } from "@/components/app-nav";
+import { HelpAssistant } from "@/components/help-assistant";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-dvh bg-muted/30">
       <AppNav name={session.name} role={session.role} />
       <main className="mx-auto max-w-5xl p-4 pb-16">{children}</main>
+      <HelpAssistant role={session.role} />
     </div>
   );
 }

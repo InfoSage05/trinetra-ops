@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { prisma } from "@/lib/db";
-import { createProduct, renameProduct, setCartonSize, updateProduct } from "@/domain/products";
+import { createProduct, quickEditProduct, renameProduct, setCartonSize, updateProduct } from "@/domain/products";
 import { importProducts } from "@/domain/imports";
 import { importOpeningStock, previewOpeningStock, getCurrentStock } from "@/domain/stock";
 import { createBill } from "@/domain/billing";
@@ -77,5 +77,21 @@ describe("items without a code", () => {
     for (const bad of ["0", "-2", "1.5", "abc", ""]) await expect(setCartonSize(owner, { id: item.id, qtyPerCarton: bad })).rejects.toThrow();
     await expect(setCartonSize(worker, { id: item.id, qtyPerCarton: "5" })).rejects.toBeInstanceOf(ForbiddenError);
     expect((await prisma.product.findUniqueOrThrow({ where: { id: item.id } })).qtyPerCarton).toBe(24);
+  });
+
+  it("rate and name can be changed together or alone from the quick-edit table", async () => {
+    const owner = await makeUser("OWNER");
+    const worker = await makeUser("WORKER");
+    const item = await createProduct(owner, { ...base, name: "Birthday 12", unitPrice: "0" });
+    await createProduct(owner, { ...base, name: "Birthday 17" });
+    const both = await quickEditProduct(owner, { id: item.id, name: "  Birthday   twelve ", unitPrice: "42.5" });
+    expect(both.name).toBe("Birthday twelve");
+    expect(both.unitPrice.toString()).toBe("42.5");
+    expect((await quickEditProduct(owner, { id: item.id, unitPrice: "50" })).name).toBe("Birthday twelve");
+    expect((await quickEditProduct(owner, { id: item.id, name: "Birthday 12 small" })).unitPrice.toString()).toBe("50");
+    await expect(quickEditProduct(owner, { id: item.id, name: "birthday 17" })).rejects.toMatchObject({ code: "DUPLICATE_NAME" });
+    await expect(quickEditProduct(owner, { id: item.id })).rejects.toThrow();
+    await expect(quickEditProduct(owner, { id: item.id, unitPrice: "-5" })).rejects.toThrow();
+    await expect(quickEditProduct(worker, { id: item.id, unitPrice: "9" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

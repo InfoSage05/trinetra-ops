@@ -61,7 +61,7 @@ async function chat(baseUrl: string, apiKey: string | undefined, model: string, 
  */
 export type VisionClient = {
   model: string;
-  describe(input: { system: string; user: string; imageDataUrl: string }): Promise<string>;
+  describe(input: { system: string; user: string; imageDataUrls: string[] }): Promise<string>;
 };
 
 let visionOverride: VisionClient | null | undefined;
@@ -78,10 +78,10 @@ export function getVisionClient(): VisionClient | null {
   const apiKey = process.env.LLM_API_KEY?.trim();
   return {
     model,
-    describe: ({ system, user, imageDataUrl }) =>
+    describe: ({ system, user, imageDataUrls }) =>
       chat(baseUrl, apiKey, model, [
         { role: "system", content: system },
-        { role: "user", content: [{ type: "text", text: user }, { type: "image_url", image_url: { url: imageDataUrl } }] },
+        { role: "user", content: [{ type: "text", text: user }, ...imageDataUrls.map((url) => ({ type: "image_url" as const, image_url: { url } }))] },
       ]),
   };
 }

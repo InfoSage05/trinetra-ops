@@ -91,7 +91,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
               onMouseDown={(e) => { e.preventDefault(); pick(p); onNext(); }}
             >
               <span>{p.name}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}</span>
-              <span className="whitespace-nowrap text-muted-foreground">{formatQuantity(p.unitPrice)}</span>
+              <span className="whitespace-nowrap text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
             </li>
           ))}
         </ul>
@@ -127,11 +127,11 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
     <div className="overflow-x-auto rounded-md border bg-background" data-testid="bill-sheet">
       <table ref={tableRef} className="w-full min-w-[980px] border-collapse text-sm">
         <colgroup>
-          {[4, 24, 7, 7, 5, 7, 7, 5, 8, 7, 8, 8, 8, 9, 3].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+          {[4, 21, 6, 7, 5, 6, 7, 5, 8, 7, 5, 8, 8, 8, 9, 3].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "+ Pcs", "Qty per carton", "Total qty", "Unit", "Rate", "Discount ₹", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "+ Pcs", "Qty per carton", "Total qty", "Unit", "Rate", "Discount ₹", "GST %", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -172,6 +172,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                   <input data-cell={cell("discount")} aria-label="Discount" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
                     value={line?.discountAmount ?? ""} onChange={(e) => onEdit(i, { discountAmount: e.target.value })} onKeyDown={keys(i, COL.discount)} onFocus={(e) => e.currentTarget.select()} />
                 </td>
+                <td className={`${td} text-center`} data-testid="sheet-gst-rate">{product ? `${formatQuantity(product.gstRate)}%` : ""}</td>
                 <td className={num}>{pl && !interState ? formatAmount(pl.cgstAmount) : ""}</td>
                 <td className={num}>{pl && !interState ? formatAmount(pl.sgstAmount) : ""}</td>
                 <td className={num}>{pl && interState ? formatAmount(pl.igstAmount) : ""}</td>
@@ -191,7 +192,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
             <td className={td} />
             <td className={td} />
             <td className={num}>{preview ? formatQuantity(totalQty) : ""}</td>
-            <td colSpan={3} className={td} />
+            <td colSpan={4} className={td} />
             <td className={num}>{preview && !interState ? formatAmount(sum((l) => l.cgstAmount)) : ""}</td>
             <td className={num}>{preview && !interState ? formatAmount(sum((l) => l.sgstAmount)) : ""}</td>
             <td className={num}>{preview && interState ? formatAmount(sum((l) => l.igstAmount)) : ""}</td>
@@ -205,7 +206,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
               <tr key={c.kind}>
                 <td colSpan={3} className={`${td} px-2 py-1 font-bold uppercase`}>{c.label}</td>
                 <td colSpan={2} className={`${td} px-2 text-right font-bold`}>AMOUNT</td>
-                <td colSpan={5} className={td}>
+                <td colSpan={6} className={td}>
                   <input id={`charge-${c.kind}`} aria-label={c.label} inputMode="decimal" placeholder="0.00" className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50"
                     value={charges[c.kind]} onChange={(e) => onCharges({ ...charges, [c.kind]: e.target.value })} onFocus={(e) => e.currentTarget.select()} />
                 </td>
@@ -220,14 +221,14 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
 
           {preview && !D(preview.roundOff).isZero() && (
             <tr>
-              <td colSpan={13} className={`${td} px-2 py-1 text-right font-bold`}>ROUND OFF</td>
+              <td colSpan={14} className={`${td} px-2 py-1 text-right font-bold`}>ROUND OFF</td>
               <td className={num}>{formatAmount(preview.roundOff)}</td>
               <td className={td} />
             </tr>
           )}
           <tr className="bg-neutral-50">
             <td colSpan={3} className={`${td} px-2 py-2 font-bold`}>INVOICE VALUE (IN WORDS)</td>
-            <td colSpan={7} className={`${td} px-2`}>{preview ? amountInWords(preview.grandTotal) : ""}</td>
+            <td colSpan={8} className={`${td} px-2`}>{preview ? amountInWords(preview.grandTotal) : ""}</td>
             <td colSpan={3} className={`${td} px-2 text-right font-bold`}>GRAND TOTAL</td>
             <td className={`${num} text-base font-bold`} data-testid="sheet-grand-total">{preview ? formatAmount(preview.grandTotal) : ""}</td>
             <td className={td} />

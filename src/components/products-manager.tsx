@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
+import { RatesTable } from "@/components/rates-table";
 import { createProductAction, importProductsAction, setProductActiveAction, updateProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
@@ -18,6 +19,7 @@ type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate
 export function ProductsManager({ products }: { products: Product[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"items" | "rates">("items");
   const [editing, setEditing] = useState<Editing | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -50,8 +52,13 @@ export function ProductsManager({ products }: { products: Product[] }) {
         <Button variant="outline" onClick={() => setImportOpen(true)}>Import from Excel</Button>
         <Button onClick={() => setEditing({ ...EMPTY })}>Add product</Button>
       </div>
-      <Input placeholder="Search name or code" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
-      <ul className="divide-y rounded-md border bg-background">
+      <div role="group" aria-label="Products view" className="inline-flex overflow-hidden rounded-md border">
+        <button type="button" aria-pressed={view === "items"} onClick={() => setView("items")} className={`px-3 py-2 text-sm ${view === "items" ? "bg-primary text-primary-foreground" : "bg-background"}`}>All details</button>
+        <button type="button" aria-pressed={view === "rates"} onClick={() => setView("rates")} className={`px-3 py-2 text-sm ${view === "rates" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Rates and names</button>
+      </div>
+      {view === "rates" && <RatesTable items={products} />}
+      {view === "items" && <Input placeholder="Search name or code" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />}
+      {view === "items" && <ul className="divide-y rounded-md border bg-background">
         {visible.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
@@ -65,7 +72,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
           </li>
         ))}
         {visible.length === 0 && <li className="p-6 text-center text-muted-foreground">No products yet. Add one or import from Excel.</li>}
-      </ul>
+      </ul>}
 
       <Dialog open={editing !== null} onOpenChange={(open) => { if (!open) setEditing(null); }}>
         <DialogContent>

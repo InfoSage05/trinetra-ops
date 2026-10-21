@@ -149,6 +149,7 @@ function assemble(a: Assembly): OrderProposal {
 // ── Photos ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_IMAGES = 5;
 
 /** Only real pictures are sent on: the first bytes must say PNG, JPEG or WebP, whatever the file is called. */
 export function imageMimeType(bytes: Uint8Array): "image/png" | "image/jpeg" | "image/webp" | null {
@@ -158,16 +159,20 @@ export function imageMimeType(bytes: Uint8Array): "image/png" | "image/jpeg" | "
   return null;
 }
 
-/** A photo of a written or printed order becomes a proposal, exactly like typed text: a person checks it, then saves. */
+/** One or more photos of a written or printed order become a proposal, exactly like typed text: a person checks it, then saves. */
 export async function proposeOrderFromImage(session: Session | null, rawInput: unknown): Promise<OrderProposal> {
   requireRole(session, ["OWNER"]);
-  const input = parseInput(z.object({ image: z.instanceof(Uint8Array), customerId: z.string().trim().min(1).optional() }), rawInput);
+  const input = parseInput(z.object({ images: z.array(z.instanceof(Uint8Array)).min(1, "Choose a photo.").max(MAX_IMAGES, `Choose at most ${MAX_IMAGES} photos at a time.`), customerId: z.string().trim().min(1).optional() }), rawInput);
   const vision = getVisionClient();
   if (!vision) throw new DomainError("VISION_OFF", "Reading photos is not switched on. Ask for the order to be typed, or add a vision model (see docs/keys.md).");
-  if (input.image.length === 0) throw new ValidationError("Choose a photo.");
-  if (input.image.length > MAX_IMAGE_BYTES) throw new ValidationError("The photo is too big (over 4 MB). Take it again at a lower quality or crop it.");
-  const mime = imageMimeType(input.image);
-  if (!mime) throw new ValidationError("Choose a photo in PNG, JPG or WebP format.");
+  const imageDataUrls = input.images.map((image, i) => {
+    const which = input.images.length > 1 ? ` (photo ${i + 1})` : "";
+    if (image.length === 0) throw new ValidationError(`Choose a photo${which}.`);
+    if (image.length > MAX_IMAGE_BYTES) throw new ValidationError(`The photo${which} is too big (over 4 MB). Take it again at a lower quality or crop it.`);
+    const mime = imageMimeType(image);
+    if (!mime) throw new ValidationError(`Choose photos in PNG, JPG or WebP format${which}.`);
+    return `data:${mime};base64,${Buffer.from(image).toString("base64")}`;
+  });
 
   const [customers, products] = await Promise.all([
     prisma.customer.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" }, take: 500 }),
@@ -187,13 +192,13 @@ export async function proposeOrderFromImage(session: Session | null, rawInput: u
     ].join(" "),
     user: `Known customers: ${customers.slice(0, 200).map((c) => c.name).join("; ")}
 Known items: ${products.slice(0, 300).map((p) => p.name).join("; ")}
-Read the order in the picture.`,
-    imageDataUrl: `data:${mime};base64,${Buffer.from(input.image).toString("base64")}`,
+Read the order in the ${imageDataUrls.length > 1 ? "pictures. They are pages of one order, so combine them into one list" : "picture"}.`,
+    imageDataUrls,
   });
   const parsed = extractedSchema.safeParse(extractJson(answer));
   if (!parsed.success) throw new DomainError("AI_BAD_OUTPUT", "The photo could not be read clearly. Try a sharper, straight-on photo, or type the order.");
   return assemble({
-    sourceText: "(from a photo)", extractor: "LLM", model: vision.model,
+    sourceText: imageDataUrls.length > 1 ? `(from ${imageDataUrls.length} photos)` : "(from a photo)", extractor: "LLM", model: vision.model,
     customerName: parsed.data.customer ?? "", dueDate: parsed.data.dueDate && parsed.data.dueDate >= today ? parsed.data.dueDate : null,
     items: parsed.data.items, notes: ["Read from a photo. Check every line against the original, especially handwriting."],
     customers, products, forcedCustomer,

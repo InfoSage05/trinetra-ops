@@ -12,15 +12,15 @@ const refresh = () => { for (const p of ["/orders", "/dashboard"]) revalidatePat
 export async function proposeOrderAction(input: unknown) {
   return runAction(async () => proposeOrder(await getSession(), input));
 }
-/** A photo of an order, sent as form data (the browser cannot pass a File as plain JSON). */
+/** Photos of an order, sent as form data (the browser cannot pass a File as plain JSON). */
 export async function proposeOrderFromImageAction(formData: FormData) {
   return runAction(async () => {
     const session = await getSession();
     requireRole(session, ["OWNER"]);
-    const file = formData.get("image");
-    if (!(file instanceof File) || file.size === 0) throw new ValidationError("Choose a photo.");
+    const files = formData.getAll("image").filter((f): f is File => f instanceof File && f.size > 0);
+    if (files.length === 0) throw new ValidationError("Choose a photo.");
     const customerId = String(formData.get("customerId") ?? "").trim();
-    return proposeOrderFromImage(session, { image: new Uint8Array(await file.arrayBuffer()), ...(customerId ? { customerId } : {}) });
+    return proposeOrderFromImage(session, { images: await Promise.all(files.map(async (f) => new Uint8Array(await f.arrayBuffer()))), ...(customerId ? { customerId } : {}) });
   });
 }
 export async function createOrderAction(input: unknown) {

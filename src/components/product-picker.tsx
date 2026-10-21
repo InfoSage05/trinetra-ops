@@ -29,7 +29,7 @@ export function ProductPicker({ products, value, onSelect }: { products: Billabl
                 <CommandItem key={p.id} value={`${p.name} ${p.sku ?? ""}`} onSelect={() => { onSelect(p); setOpen(false); }}>
                   <div className="flex w-full justify-between gap-2">
                     <span>{p.name}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}</span>
-                    <span className="whitespace-nowrap text-sm text-muted-foreground">{describeStock(p.stock, p.qtyPerCarton)} · {formatINR(p.unitPrice)}</span>
+                    <span className="whitespace-nowrap text-sm text-muted-foreground">{describeStock(p.stock, p.qtyPerCarton)} · {formatINR(p.unitPrice)} + GST {Number(p.gstRate)}%</span>
                   </div>
                 </CommandItem>
               ))}

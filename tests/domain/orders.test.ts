@@ -177,12 +177,12 @@ describe("proposeOrderFromImage", () => {
     let sentImage = "";
     setVisionClientForTests({
       model: "vision-test",
-      describe: async ({ imageDataUrl }) => {
-        sentImage = imageDataUrl;
+      describe: async ({ imageDataUrls }) => {
+        sentImage = imageDataUrls[0];
         return JSON.stringify({ customer: "someone else", dueDate: isoIn(4), items: [{ name: "rose", quantity: 2, unit: "carton" }] });
       },
     });
-    const p = await proposeOrderFromImage(owner, { image: png, customerId: customer.id });
+    const p = await proposeOrderFromImage(owner, { images: [png], customerId: customer.id });
     expect(sentImage.startsWith("data:image/png;base64,")).toBe(true);
     expect(p.extractor).toBe("LLM");
     expect(p.model).toBe("vision-test");
@@ -195,7 +195,7 @@ describe("proposeOrderFromImage", () => {
   it("reads the customer from the photo when none is chosen", async () => {
     const { owner, customer } = await world();
     setVisionClientForTests({ model: "v", describe: async () => JSON.stringify({ customer: "Sharma Traders", items: [] }) });
-    const p = await proposeOrderFromImage(owner, { image: png });
+    const p = await proposeOrderFromImage(owner, { images: [png] });
     expect(p.customer).toMatchObject({ status: "MATCHED", id: customer.id });
     expect(p.notes.join(" ")).toMatch(/No items/);
   });
@@ -203,14 +203,14 @@ describe("proposeOrderFromImage", () => {
   it("refuses non-pictures, huge files, a missing vision model, unreadable answers and non-owners", async () => {
     const { owner, worker } = await world();
     setVisionClientForTests({ model: "v", describe: async () => "{}" });
-    await expect(proposeOrderFromImage(owner, { image: new TextEncoder().encode("MZ-not-a-picture-at-all") })).rejects.toBeInstanceOf(ValidationError);
-    await expect(proposeOrderFromImage(owner, { image: new Uint8Array(5 * 1024 * 1024).fill(0xff) })).rejects.toBeInstanceOf(ValidationError);
-    await expect(proposeOrderFromImage(owner, { image: png, customerId: "nope" })).rejects.toThrow();
+    await expect(proposeOrderFromImage(owner, { images: [new TextEncoder().encode("MZ-not-a-picture-at-all")] })).rejects.toBeInstanceOf(ValidationError);
+    await expect(proposeOrderFromImage(owner, { images: [new Uint8Array(5 * 1024 * 1024).fill(0xff)] })).rejects.toBeInstanceOf(ValidationError);
+    await expect(proposeOrderFromImage(owner, { images: [png], customerId: "nope" })).rejects.toThrow();
     setVisionClientForTests({ model: "v", describe: async () => "I cannot read this." });
-    await expect(proposeOrderFromImage(owner, { image: png })).rejects.toMatchObject({ code: "AI_BAD_OUTPUT" });
+    await expect(proposeOrderFromImage(owner, { images: [png] })).rejects.toMatchObject({ code: "AI_BAD_OUTPUT" });
     setVisionClientForTests(null);
-    await expect(proposeOrderFromImage(owner, { image: png })).rejects.toMatchObject({ code: "VISION_OFF" });
-    await expect(proposeOrderFromImage(worker, { image: png })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(proposeOrderFromImage(owner, { images: [png] })).rejects.toMatchObject({ code: "VISION_OFF" });
+    await expect(proposeOrderFromImage(worker, { images: [png] })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("an order made from a photo is saved as coming from a photo", async () => {
@@ -218,6 +218,24 @@ describe("proposeOrderFromImage", () => {
     const order = await createOrder(owner, { customerId: customer.id, dueDate: isoIn(2), idempotencyKey: "order-key-img1", source: "IMAGE", lines: [{ productId: rose.id, cartons: "1" }] });
     expect(order.source).toBe("IMAGE");
     expect(order.actorType).toBe("AGENT");
+  });
+
+  it("reads several photos of the same order together, up to five", async () => {
+    const { owner, rose } = await world();
+    let received = 0;
+    setVisionClientForTests({
+      model: "v",
+      describe: async ({ imageDataUrls }) => {
+        received = imageDataUrls.length;
+        return JSON.stringify({ customer: "Sharma Traders", items: [{ name: "rose", quantity: 1, unit: "carton" }] });
+      },
+    });
+    const p = await proposeOrderFromImage(owner, { images: [png, png, png] });
+    expect(received).toBe(3);
+    expect(p.sourceText).toBe("(from 3 photos)");
+    expect(p.lines[0]).toMatchObject({ productId: rose.id });
+    await expect(proposeOrderFromImage(owner, { images: Array(6).fill(png) })).rejects.toBeInstanceOf(ValidationError);
+    await expect(proposeOrderFromImage(owner, { images: [] })).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("only accepts real picture formats", () => {

@@ -15,6 +15,7 @@ import { ProductPicker, type BillableProduct } from "@/components/product-picker
 import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
+import { GstSummary } from "@/components/gst-summary";
 import { CHARGE_FIELDS, blankLine, linePieces, type Charges, type Line } from "@/components/bill-lines";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
@@ -226,6 +227,8 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
           <Button variant="outline" className="h-12 w-full" onClick={() => setLines([...lines, blankLine()])}>+ Add another item</Button>
             </>
           )}
+
+          <GstSummary preview={preview} />
 
           <Card><CardContent className="space-y-3 pt-6">
             {layout === "cards" && (
