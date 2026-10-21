@@ -8,7 +8,8 @@ fully before touching code or docs.
 
 Software for a candle manufacturing business (Trinetra Candles), replacing a manual
 Excel+HDPOS billing/inventory workflow that breaks down under festival-season order volume. It
-is being built in phases; only Phase 1 (inventory + billing core) is currently designed.
+is built in phases. Phase 1 (inventory + billing core) is merged; Phases 2-4 (AI-assisted entry, orders and
+reminders, reports) and the carton-based invoice are on branch `feature/carton-invoice-and-phases-2-4`.
 
 **Canonical spec:** `docs/superpowers/specs/2026-10-20-phase1-inventory-billing-design.md` (v2).
 Read this before implementing anything. It is the single source of truth for Phase 1 scope,
@@ -17,6 +18,9 @@ data model, and architecture.
 **Implementation plan:** `docs/superpowers/plans/2026-10-20-phase1-inventory-billing.md` (v2,
 29 tasks). Execute tasks in order; each task's *Interfaces* block names exactly what it consumes
 and produces. Read the plan's "Global Constraints" and "Conventions" sections first.
+
+**Phases 2-4 and the carton invoice:** `docs/superpowers/specs/2026-10-21-carton-invoice-and-phases-2-4-design.md`.
+Owner-facing key/account setup is in `docs/keys.md`.
 
 **Never bypass safety guards.** Prisma 7 refuses destructive commands (`migrate reset`,
 `db push --accept-data-loss`) when run by an AI agent unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
@@ -67,10 +71,21 @@ Rules on this:
 - The government e-invoice IRP is an external system. Never design it as part of a database
   transaction — it needs an async job + retry/reconciliation pattern (see v2 spec Section 6).
 
+## AI features (Phases 2-3)
+
+- The model never writes data. `src/domain/ai-stock.ts` and `src/domain/ai-orders.ts` only return
+  *proposals* (validated, matched against the real catalogue). A person approves; only then the normal
+  domain functions run, with `actorType = AGENT` and provenance in `sourceMetadata`.
+- Every AI path has a no-key fallback (`src/lib/text-entry.ts`), so the app works without any key.
+- Providers are OpenAI-compatible open-source hosts configured by `LLM_*` / `STT_*` env vars
+  (`src/lib/llm.ts`, `src/lib/stt.ts`). Tests inject fakes with `setLlmClientForTests`; never call a real
+  provider from tests.
+- Order fulfilment is derived from bills raised against the order (`Bill.orderId`), never stored.
+
 ## Scope discipline
 
-- Respect phase boundaries. Phase 1 is finished-goods inventory + billing only — no raw
-  material/BOM tracking, no LLM features, no pending-orders dashboard. If a task seems to need
+- Respect phase boundaries. Raw material/BOM tracking, multi-warehouse and a real e-invoice
+  adapter are still out of scope (see section 8 of the 2026-10-21 spec). If a task seems to need
   something from a later phase, stop and flag it rather than quietly expanding scope.
 - This is a small-scale system (dozens of SKUs, <50 bills/day peak, 1–3 concurrent users). Don't
   add infrastructure, caching, or abstraction layers sized for a bigger business than this one.

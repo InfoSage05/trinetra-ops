@@ -35,3 +35,11 @@ Sales/GST/ageing/stock-movement reports with date ranges, CSV exports (sales reg
 
 ## 8. Out of scope / later
 Raw-material and BOM tracking, multi-warehouse, a real e-invoice (IRP/GSP) adapter (needs CA confirmation + credentials), payment-gateway collection.
+
+## 9. Implementation notes (as built)
+- **Phone stock panel:** a floating card covered the form fields on a phone, so phones get a slim one-line bar (item, in stock, left after this bill) above the Save button; laptops get the full sticky panel with the all-items list. Both are driven by the item being edited.
+- **Item page** shows stock, movements and recent sales and links to "Bill this item"; adding production stays on the Stock list (one place to do it).
+- **Orders:** lines are immutable (DB trigger); an order is cancelled or closed, never edited. Delivered quantity is *derived* from bills raised against the order (`Bill.orderId`), so it cannot disagree with the invoices. Credit notes do not reduce delivered quantity.
+- **AI:** proposals only. Typed text, voice (speech-to-text fills the text box) and stock sheets all go through `proposeStockUpdate` / `proposeStockCountsFromSheet` / `proposeOrder`, validated and matched to the catalogue; a person approves; production is written as `PRODUCED` with `actorType = AGENT` and provenance; sheet uploads become stock counts that the owner approves. With no `LLM_*` variables the plain-code reader in `src/lib/text-entry.ts` is used.
+- **Reports:** date-range sales summary (by day / item / customer), dues ageing, stock movement; CSV exports (sales register incl. credit notes as negatives; HSN summary incl. charges and credit-note netting) with spreadsheet-formula protection; dues come from one SQL query (`listOutstandingBills`) instead of loading every bill; bills list is paginated; indexes added for the report queries.
+- **Not verified here:** real LLM / speech calls (they need the owner's key; tests use fakes), and the restore rehearsal / CI run (no Docker or `pg_dump` on this machine).
