@@ -8,6 +8,7 @@ import { NotFoundError } from "@/lib/errors";
 import { formatINR, formatQuantity } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
 import { getProductDetail } from "@/domain/reports";
+import { RenameItem } from "@/components/rename-item";
 
 const MOVEMENT_LABEL = { OPENING: "Opening stock", PRODUCED: "Made", BILLED: "Sold on a bill", RETURN: "Returned", ADJUSTMENT: "Correction" } as const;
 
@@ -22,8 +23,8 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       <Link href="/inventory" className="text-sm underline">← All stock</Link>
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
-          <h1 className="text-xl font-semibold">{item.name}</h1>
-          <p className="text-sm text-muted-foreground">{item.sku} · {item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · ${formatINR(item.unitPrice.toString())} each` : ""}</p>
+          <h1 className="flex items-center gap-2 text-xl font-semibold">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
+          <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · ${formatINR(item.unitPrice.toString())} each` : ""}</p>
         </div>
         {isOwner && <Link href={`/billing/new?product=${item.id}`} className={buttonVariants({ size: "lg" })}>Bill this item</Link>}
       </div>

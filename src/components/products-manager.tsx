@@ -10,7 +10,7 @@ import { createProductAction, importProductsAction, setProductActiveAction, upda
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
 
-type Product = { id: string; sku: string; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
+type Product = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
 const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", gstRate: "", reorderLevel: "0" };
 type Editing = typeof EMPTY & { id?: string };
 type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate: number; toUpdate: number; created: number; updated: number };
@@ -23,7 +23,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportResult | null>(null);
 
-  const visible = products.filter((p) => `${p.name} ${p.sku}`.toLowerCase().includes(search.toLowerCase()));
+  const visible = products.filter((p) => `${p.name} ${p.sku ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   async function save() {
     if (!editing) return;
@@ -50,15 +50,15 @@ export function ProductsManager({ products }: { products: Product[] }) {
         <Button variant="outline" onClick={() => setImportOpen(true)}>Import from Excel</Button>
         <Button onClick={() => setEditing({ ...EMPTY })}>Add product</Button>
       </div>
-      <Input placeholder="Search name or SKU" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Input placeholder="Search name or code" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
       <ul className="divide-y rounded-md border bg-background">
         {visible.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
-              <p className="font-medium">{p.name} {!p.isActive && <Badge variant="secondary">Inactive</Badge>}</p>
-              <p className="text-sm text-muted-foreground">{p.sku} · {p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · {formatINR(p.unitPrice)}/{p.unit}</p>
+              <p className="font-medium">{p.name} {!p.isActive && <Badge variant="secondary">Inactive</Badge>} {Number(p.unitPrice) === 0 && <Badge variant="destructive">Price not set</Badge>}</p>
+              <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · {formatINR(p.unitPrice)}/{p.unit}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
             <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setProductActiveAction({ id: p.id, isActive: !p.isActive }))) router.refresh(); }}>
               {p.isActive ? "Deactivate" : "Activate"}
             </Button>
@@ -72,8 +72,8 @@ export function ProductsManager({ products }: { products: Product[] }) {
           <DialogHeader><DialogTitle>{editing?.id ? "Edit product" : "Add product"}</DialogTitle></DialogHeader>
           {editing && (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field id="sku" label="SKU / code" value={editing.sku} onChange={(e) => setEditing({ ...editing, sku: e.target.value })} />
-              <Field id="name" label="Name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              <Field id="name" label="Name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} hint="You can rename an item any time. Bills already made keep the name they were printed with." />
+              <Field id="sku" label="Code (optional)" value={editing.sku} onChange={(e) => setEditing({ ...editing, sku: e.target.value })} hint="Leave empty if you do not use item codes" />
               <Field id="price" label="Price (before GST)" inputMode="decimal" value={editing.unitPrice} onChange={(e) => setEditing({ ...editing, unitPrice: e.target.value })} />
               <Field id="unit" label="Unit" value={editing.unit} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} />
               <Field id="qpc" label="Pieces in one carton" inputMode="numeric" value={editing.qtyPerCarton} onChange={(e) => setEditing({ ...editing, qtyPerCarton: e.target.value })} hint="Different for each item, e.g. 12 for birthday candles, 40 for masjid candles" />
@@ -89,7 +89,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
       <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) { setPreview(null); setFile(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Import products from Excel</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">First row must be headings: <b>SKU, Name, HSN, GST %, Price</b> (optional: Unit, Qty per carton, Reorder level). Existing SKUs are updated.</p>
+          <p className="text-sm text-muted-foreground">First row must be headings: <b>Name, HSN, GST %, Price</b> (optional: Code, Unit, Qty per carton, Reorder level). Items already in the list (same code, or same name) are updated.</p>
           <Input type="file" accept=".xlsx,.csv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} />
           {preview && (
             <div className="space-y-2 text-sm">

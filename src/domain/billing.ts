@@ -73,7 +73,7 @@ export const billDraftSchema = z.object({
 export type BillDraft = z.output<typeof billDraftSchema>;
 
 export type PreviewLine = LineAmounts & {
-  productId: string; productName: string; productSku: string; hsnCode: string; unit: string;
+  productId: string; productName: string; productSku: string | null; hsnCode: string; unit: string;
   quantity: Decimal; qtyPerCarton: number; cartons: Decimal; unitPrice: Decimal; gstRate: Decimal;
   availableBefore: Decimal; shortfallQuantity: Decimal | null;
 };

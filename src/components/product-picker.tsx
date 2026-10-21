@@ -7,7 +7,7 @@ import { describeStock } from "@/lib/cartons";
 import { formatINR } from "@/lib/money";
 
 export type BillableProduct = {
-  id: string; sku: string; name: string; unit: string; qtyPerCarton: number; reorderLevel: string;
+  id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; reorderLevel: string;
   unitPrice: string; gstRate: string; stock: string;
 };
 
@@ -26,9 +26,9 @@ export function ProductPicker({ products, value, onSelect }: { products: Billabl
             <CommandEmpty>No matching item.</CommandEmpty>
             <CommandGroup>
               {products.map((p) => (
-                <CommandItem key={p.id} value={`${p.name} ${p.sku}`} onSelect={() => { onSelect(p); setOpen(false); }}>
+                <CommandItem key={p.id} value={`${p.name} ${p.sku ?? ""}`} onSelect={() => { onSelect(p); setOpen(false); }}>
                   <div className="flex w-full justify-between gap-2">
-                    <span>{p.name} <span className="text-muted-foreground">({p.sku})</span></span>
+                    <span>{p.name}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}</span>
                     <span className="whitespace-nowrap text-sm text-muted-foreground">{describeStock(p.stock, p.qtyPerCarton)} · {formatINR(p.unitPrice)}</span>
                   </div>
                 </CommandItem>

@@ -6,8 +6,15 @@ import { toFixed2 } from "@/lib/money";
 import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, positiveInt, requiredText } from "@/lib/validation";
 
 export const productSchema = z.object({
-  sku: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_/-]{0,39}$/, "SKU may use letters, digits, - _ / (max 40)"),
-  name: requiredText("Name", 120),
+  // The item code is optional: the name is enough to tell items apart.
+  sku: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .optional()
+    .transform((v) => v || undefined)
+    .refine((v) => v === undefined || /^[A-Z0-9][A-Z0-9_/-]{0,39}$/.test(v), "Code may use letters, digits, - _ / (max 40)"),
+  name: requiredText("Name", 120).transform(tidyName),
   unit: z.string().trim().min(1).max(20).default("pcs"),
   qtyPerCarton: positiveInt.default(1),
   hsnCode,
@@ -16,19 +23,32 @@ export const productSchema = z.object({
   reorderLevel: nonNegativeQuantity.default("0"),
 });
 
-function toData(input: z.output<typeof productSchema>) {
-  return { ...input, unitPrice: toFixed2(input.unitPrice), gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
+/** Collapses stray spaces and line breaks (names pasted from Excel often have them). */
+export function tidyName(name: string): string {
+  return name.replace(/\s+/g, " ").trim();
 }
 
-async function assertSkuFree(sku: string, exceptId?: string) {
+function toData(input: z.output<typeof productSchema>) {
+  return { ...input, sku: input.sku ?? null, unitPrice: toFixed2(input.unitPrice), gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
+}
+
+async function assertSkuFree(sku: string | undefined, exceptId?: string) {
+  if (!sku) return;
   const clash = await prisma.product.findUnique({ where: { sku } });
-  if (clash && clash.id !== exceptId) throw new DomainError("DUPLICATE_SKU", `SKU ${sku} is already used by "${clash.name}".`);
+  if (clash && clash.id !== exceptId) throw new DomainError("DUPLICATE_SKU", `Code ${sku} is already used by "${clash.name}".`);
+}
+
+/** Two active items with the same name could not be told apart on a bill, so the name must be unique. */
+async function assertNameFree(name: string, exceptId?: string) {
+  const clash = await prisma.product.findFirst({ where: { name: { equals: name, mode: "insensitive" }, isActive: true, ...(exceptId ? { id: { not: exceptId } } : {}) } });
+  if (clash) throw new DomainError("DUPLICATE_NAME", `An item named "${clash.name}" already exists. Give this one a different name so they are not mixed up.`);
 }
 
 export async function createProduct(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(productSchema, rawInput);
   await assertSkuFree(input.sku);
+  await assertNameFree(input.name);
   return prisma.product.create({ data: toData(input) });
 }
 
@@ -37,7 +57,17 @@ export async function updateProduct(session: Session | null, rawInput: unknown) 
   const { id, ...input } = parseInput(productSchema.extend({ id: entityId }), rawInput);
   if (!(await prisma.product.findUnique({ where: { id } }))) throw new NotFoundError("Product");
   await assertSkuFree(input.sku, id);
+  await assertNameFree(input.name, id);
   return prisma.product.update({ where: { id }, data: toData(input) });
+}
+
+/** Changes only the name. Bills already made keep the name they were printed with. */
+export async function renameProduct(session: Session | null, rawInput: unknown) {
+  requireRole(session, ["OWNER"]);
+  const { id, name } = parseInput(z.object({ id: entityId, name: requiredText("Name", 120).transform(tidyName) }), rawInput);
+  if (!(await prisma.product.findUnique({ where: { id } }))) throw new NotFoundError("Product");
+  await assertNameFree(name, id);
+  return prisma.product.update({ where: { id }, data: { name } });
 }
 
 export async function setProductActive(session: Session | null, rawInput: unknown) {

@@ -31,9 +31,9 @@ describe("pieces per carton on products", () => {
     const base = { name: "Flower Candle", hsnCode: "3406", unitPrice: "20", gstRate: "18" };
     const p = await createProduct(owner, { ...base, sku: "FL-1", qtyPerCarton: "24" });
     expect(p.qtyPerCarton).toBe(24);
-    expect((await createProduct(owner, { ...base, sku: "FL-2" })).qtyPerCarton).toBe(1);
+    expect((await createProduct(owner, { ...base, name: "Flower Candle 2", sku: "FL-2" })).qtyPerCarton).toBe(1);
     for (const bad of ["0", "-3", "2.5", "abc"]) {
-      await expect(createProduct(owner, { ...base, sku: `FL-${bad}`, qtyPerCarton: bad })).rejects.toThrow(ValidationError);
+      await expect(createProduct(owner, { ...base, name: `Flower ${bad}`, sku: `FL-${bad}`, qtyPerCarton: bad })).rejects.toThrow(ValidationError);
     }
   });
 

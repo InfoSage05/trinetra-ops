@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { describeStock } from "@/lib/cartons";
 import { D, formatQuantity } from "@/lib/money";
 
-export type PanelProduct = { id: string; name: string; sku: string; unit: string; qtyPerCarton: number; reorderLevel: string; stock: string };
+export type PanelProduct = { id: string; name: string; sku: string | null; unit: string; qtyPerCarton: number; reorderLevel: string; stock: string };
 
 type Props = {
   product: PanelProduct | undefined;
@@ -50,7 +50,7 @@ export function StockPanel({ product, availableNow, takingNow, others }: Props) 
       <h2 className="text-base font-semibold">Stock check</h2>
       {product ? (
         <div className="mt-2 space-y-2">
-          <p className="font-medium">{product.name} <span className="text-sm text-muted-foreground">({product.sku})</span></p>
+          <p className="font-medium">{product.name} {product.sku && <span className="text-sm text-muted-foreground">({product.sku})</span>}</p>
           <div>
             <p className="text-xs uppercase text-muted-foreground">In stock now</p>
             <p className="text-lg font-semibold" data-testid="stock-now">{describeStock(available.toString(), product.qtyPerCarton)}</p>

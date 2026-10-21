@@ -12,7 +12,7 @@ import { callAction } from "@/lib/client/call-action";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { describeStock, toPieces } from "@/lib/cartons";
 
-type Row = { id: string; sku: string; name: string; unit: string; qtyPerCarton: number; stock: string; reorderLevel: string; status: "NEGATIVE" | "LOW" | "OK" };
+type Row = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; stock: string; reorderLevel: string; status: "NEGATIVE" | "LOW" | "OK" };
 type Mode = { kind: "produce" | "adjust"; row: Row } | null;
 
 export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean }) {
@@ -25,7 +25,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
   const [reason, setReason] = useState("");
   const [key, renewKey] = useIdempotencyKey();
   const [busy, setBusy] = useState(false);
-  const visible = rows.filter((r) => `${r.name} ${r.sku}`.toLowerCase().includes(search.toLowerCase()));
+  const visible = rows.filter((r) => `${r.name} ${r.sku ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   async function submit() {
     if (!mode || busy) return;
@@ -50,7 +50,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
           <li key={r.id} className="flex flex-wrap items-center gap-2 p-3">
             <div className="mr-auto">
               <Link href={`/inventory/${r.id}`} className="font-medium underline-offset-2 hover:underline">{r.name}</Link>
-              <p className="text-sm text-muted-foreground">{r.sku} · {r.qtyPerCarton} {r.unit} per carton</p>
+              <p className="text-sm text-muted-foreground">{r.sku ? `${r.sku} · ` : ""}{r.qtyPerCarton} {r.unit} per carton</p>
             </div>
             <span className="text-right text-sm font-semibold">{describeStock(r.stock, r.qtyPerCarton)}</span>
             {r.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}

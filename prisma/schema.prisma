@@ -97,7 +97,7 @@ model Customer {
 
 model Product {
   id                 String             @id @default(cuid())
-  sku                String             @unique
+  sku                String?            @unique
   name               String
   unit               String             @default("pcs")
   qtyPerCarton       Int                @default(1)
@@ -203,7 +203,7 @@ model BillLineItem {
   productId         String
   product           Product          @relation(fields: [productId], references: [id])
   productName       String
-  productSku        String
+  productSku        String?
   hsnCode           String
   unit              String
   qtyPerCarton      Int              @default(1)

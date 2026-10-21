@@ -138,7 +138,7 @@ export async function adjustStock(session: Session | null, rawInput: unknown): P
 
 const openingImportSchema = z.object({
   importBatchId: z.string().trim().min(3).max(100),
-  rows: z.array(z.object({ rowNumber: z.number().int(), sku: z.string().optional(), quantity: z.string().optional() })).max(2000),
+  rows: z.array(z.object({ rowNumber: z.number().int(), sku: z.string().optional(), name: z.string().optional(), quantity: z.string().optional() })).max(2000),
 });
 
 export type OpeningPreview = {
@@ -150,8 +150,9 @@ const openingKey = (batch: string, productId: string) => `opening:${batch}:${pro
 
 async function buildOpeningPreview(db: Db, input: z.output<typeof openingImportSchema>): Promise<OpeningPreview> {
   const skus = input.rows.map((r) => (r.sku ?? "").trim().toUpperCase()).filter(Boolean);
-  const products = await db.product.findMany({ where: { sku: { in: skus } } });
-  const bySku = new Map(products.map((p) => [p.sku, p]));
+  const products = await db.product.findMany({ where: { OR: [{ sku: { in: skus } }, { isActive: true }] } });
+  const bySku = new Map(products.flatMap((p) => (p.sku ? [[p.sku, p] as const] : [])));
+  const byName = new Map(products.filter((p) => p.isActive).map((p) => [p.name.replace(/\s+/g, " ").toLowerCase(), p]));
   const priorOpenings = await db.stockLedgerEntry.findMany({
     where: { type: "OPENING", productId: { in: products.map((p) => p.id) } },
     select: { productId: true, idempotencyKey: true },
@@ -162,22 +163,25 @@ async function buildOpeningPreview(db: Db, input: z.output<typeof openingImportS
   const seen = new Set<string>();
 
   for (const row of input.rows) {
-    const sku = (row.sku ?? "").trim().toUpperCase();
+    const code = (row.sku ?? "").trim().toUpperCase();
+    const typedName = (row.name ?? "").replace(/\s+/g, " ").trim();
+    // An item is found by its code when the sheet gives one, otherwise by its name.
+    const product = code ? bySku.get(code) : typedName ? byName.get(typedName.toLowerCase()) : undefined;
+    const label = code || typedName;
     const qty = nonNegativeQuantity.safeParse(row.quantity ?? "");
-    const product = bySku.get(sku);
-    const fail = (message: string) => problems.push({ rowNumber: row.rowNumber, sku, message });
+    const fail = (message: string) => problems.push({ rowNumber: row.rowNumber, sku: label, message });
 
-    if (!sku) fail("SKU is missing");
-    else if (seen.has(sku)) fail(`SKU ${sku} appears more than once in the file`);
-    else if (!product) fail(`No product with SKU ${sku}. Add or import it first.`);
+    if (!label) fail("Item code or name is missing");
+    else if (product && seen.has(product.id)) fail(`${product.name} appears more than once in the file`);
+    else if (!product) fail(`No item matches "${label}". Add or import it first.`);
     else if (!product.isActive) fail(`${product.name} is inactive`);
     else if (!qty.success) fail(qty.error.issues[0]?.message ?? "Invalid quantity");
     else if (priorOpenings.some((o) => o.productId === product.id && o.idempotencyKey !== openingKey(input.importBatchId, product.id))) {
       fail(`${product.name} already has opening stock from an earlier import. Use a stock count to correct it.`);
     } else {
-      ready.push({ rowNumber: row.rowNumber, productId: product.id, sku, name: product.name, quantity: qty.data });
+      ready.push({ rowNumber: row.rowNumber, productId: product.id, sku: label, name: product.name, quantity: qty.data });
     }
-    if (sku) seen.add(sku);
+    if (product) seen.add(product.id);
   }
   return { ready, problems };
 }

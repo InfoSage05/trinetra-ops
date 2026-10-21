@@ -12,7 +12,7 @@ function pick(values: Record<string, string>, aliases: string[]): string | undef
 }
 
 export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; unit?: string; qtyPerCarton?: string; reorderLevel?: string };
-export type OpeningRowInput = { rowNumber: number; sku?: string; quantity?: string };
+export type OpeningRowInput = { rowNumber: number; sku?: string; name?: string; quantity?: string };
 
 export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
   return rows.map(({ rowNumber, values: v }) => ({
@@ -32,6 +32,7 @@ export function mapOpeningStockRows(rows: SheetRow[]): OpeningRowInput[] {
   return rows.map(({ rowNumber, values: v }) => ({
     rowNumber,
     sku: pick(v, ["sku", "code", "itemcode"]),
+    name: pick(v, ["name", "productname", "item", "itemname", "descriptionofgoods"]),
     quantity: pick(v, ["quantity", "qty", "stock", "openingstock"]),
   }));
 }
@@ -46,9 +47,8 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   const { rows, dryRun } = parseInput(importProductsSchema, rawInput);
 
   const errors: { rowNumber: number; message: string }[] = [];
-  const valid: z.output<typeof productSchema>[] = [];
+  const valid: { data: z.output<typeof productSchema>; sizeGiven: boolean }[] = [];
   const seen = new Set<string>();
-  const sizeGiven = new Set<string>(); // SKUs whose row actually states a carton size
   for (const row of rows) {
     const result = productSchema.safeParse(row);
     const gst = Number(String(row.gstRate ?? "").replace(/,/g, ""));
@@ -59,28 +59,40 @@ export async function importProducts(session: Session | null, rawInput: unknown)
     }
     if (!result.success) {
       errors.push({ rowNumber: row.rowNumber, message: result.error.issues[0]?.message ?? "Invalid row" });
-    } else if (seen.has(result.data.sku)) {
-      errors.push({ rowNumber: row.rowNumber, message: `SKU ${result.data.sku} appears more than once in the file` });
-    } else {
-      seen.add(result.data.sku);
-      if (String(row.qtyPerCarton ?? "").trim() !== "") sizeGiven.add(result.data.sku);
-      valid.push(result.data);
+      continue;
     }
+    // An item is known by its code when it has one, otherwise by its name.
+    const key = result.data.sku ? `sku:${result.data.sku}` : `name:${result.data.name.toLowerCase()}`;
+    if (seen.has(key)) {
+      errors.push({ rowNumber: row.rowNumber, message: `${result.data.sku ? `Code ${result.data.sku}` : `"${result.data.name}"`} appears more than once in the file` });
+      continue;
+    }
+    seen.add(key);
+    // A price-list sheet with no carton column must not reset carton sizes the owner already set.
+    valid.push({ data: result.data, sizeGiven: String(row.qtyPerCarton ?? "").trim() !== "" });
   }
 
-  const existing = new Set(
-    (await prisma.product.findMany({ where: { sku: { in: valid.map((v) => v.sku) } }, select: { sku: true } })).map((p) => p.sku)
-  );
-  const summary = { errors, toCreate: valid.filter((v) => !existing.has(v.sku)).length, toUpdate: valid.filter((v) => existing.has(v.sku)).length, created: 0, updated: 0 };
+  const [bySku, byName] = await Promise.all([
+    prisma.product.findMany({ where: { sku: { in: valid.flatMap((v) => (v.data.sku ? [v.data.sku] : [])) } }, select: { id: true, sku: true } }),
+    prisma.product.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+  ]);
+  const idBySku = new Map(bySku.map((p) => [p.sku!, p.id]));
+  const idByName = new Map(byName.map((p) => [p.name.toLowerCase(), p.id]));
+  const planned = valid.map((v) => ({ ...v, existingId: (v.data.sku ? idBySku.get(v.data.sku) : undefined) ?? idByName.get(v.data.name.toLowerCase()) }));
+
+  const summary = { errors, toCreate: planned.filter((v) => !v.existingId).length, toUpdate: planned.filter((v) => v.existingId).length, created: 0, updated: 0 };
   if (dryRun || errors.length > 0) return summary;
 
   await prisma.$transaction(async (tx) => {
-    for (const p of valid) {
-      const data = { ...p, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
-      // A price-list sheet with no carton column must not reset carton sizes the owner already set.
-      const { qtyPerCarton, ...withoutSize } = data;
-      await tx.product.upsert({ where: { sku: p.sku }, create: data, update: sizeGiven.has(p.sku) ? data : withoutSize });
-      void qtyPerCarton;
+    for (const { data: p, sizeGiven, existingId } of planned) {
+      const data = { ...p, sku: p.sku ?? null, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
+      if (!existingId) {
+        await tx.product.create({ data });
+      } else {
+        const { qtyPerCarton, sku, ...rest } = data;
+        // Keep the item's existing code when the sheet does not give one.
+        await tx.product.update({ where: { id: existingId }, data: { ...rest, ...(sizeGiven ? { qtyPerCarton } : {}), ...(sku ? { sku } : {}) } });
+      }
     }
   });
   return { ...summary, created: summary.toCreate, updated: summary.toUpdate };

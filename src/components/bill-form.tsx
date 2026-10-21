@@ -14,33 +14,22 @@ import { CustomerPicker } from "@/components/customer-picker";
 import { ProductPicker, type BillableProduct } from "@/components/product-picker";
 import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
+import { BillSheet } from "@/components/bill-sheet";
+import { CHARGE_FIELDS, blankLine, linePieces, type Charges, type Line } from "@/components/bill-lines";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
-import { splitCartons, toPieces } from "@/lib/cartons";
+import { useBillLayout } from "@/lib/client/use-bill-layout";
+import { splitCartons } from "@/lib/cartons";
 import { D, amountInWords, formatINR, formatQuantity } from "@/lib/money";
 
-type Line = { rowId: number; productId: string; cartons: string; loosePieces: string; unitPrice: string; discountAmount: string };
 type PayMode = "FULL" | "PART" | "CREDIT";
-type ChargeKey = "CARTON" | "CRATE" | "FREIGHT";
 const METHODS = [
   { value: "CASH", label: "Cash" }, { value: "UPI", label: "UPI" }, { value: "BANK_TRANSFER", label: "Bank transfer" },
   { value: "CHEQUE", label: "Cheque" }, { value: "CARD", label: "Card" },
 ];
-const CHARGE_FIELDS: { kind: ChargeKey; label: string }[] = [
-  { kind: "CARTON", label: "Total carton charges" }, { kind: "CRATE", label: "Extra crate charges" }, { kind: "FREIGHT", label: "Freight charges" },
-];
-
-let nextRowId = 1;
-const blankLine = (productId = ""): Line => ({ rowId: nextRowId++, productId, cartons: "", loosePieces: "", unitPrice: "", discountAmount: "" });
-
-/** Total pieces on a line; 0 while the fields are empty or not yet a valid number. */
-function linePieces(line: Line, product: BillableProduct | undefined): string {
-  if (!product) return "0";
-  try { return toPieces(line.cartons, line.loosePieces, product.qtyPerCarton); } catch { return "0"; }
-}
 
 type Props = {
   products: BillableProduct[]; businessStateCode: string; initialCustomer?: SavedCustomer | null; initialProductId?: string;
@@ -64,8 +53,9 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     });
     return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
   });
-  const [charges, setCharges] = useState<Record<ChargeKey, string>>({ CARTON: "", CRATE: "", FREIGHT: "" });
-  const [activeRow, setActiveRow] = useState<number | null>(null);
+  const [charges, setCharges] = useState<Charges>({ CARTON: "", CRATE: "", FREIGHT: "" });
+  const [layout, setLayout] = useBillLayout();
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
   const [payMode, setPayMode] = useState<PayMode>("FULL");
   const [paidAmount, setPaidAmount] = useState("");
@@ -74,8 +64,9 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   const [saving, setSaving] = useState(false);
 
   const productOf = (l: Line) => products.find((p) => p.id === l.productId);
+  const pieceCount = (l: Line) => linePieces(l, productOf(l));
   // A line counts once it has an item and a quantity; half-filled rows must not make the preview error out.
-  const filledLines = lines.filter((l) => l.productId && D(linePieces(l, productOf(l))).greaterThan(0));
+  const filledLines = lines.filter((l) => l.productId && D(pieceCount(l)).greaterThan(0));
   const draft = {
     customerId: customer?.id ?? "",
     placeOfSupply,
@@ -108,9 +99,18 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   }, [draftJson]);
 
   const update = (rowId: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.rowId === rowId ? { ...l, ...patch } : l)));
+  // The sheet addresses rows by position; a row that does not exist yet is created when it is first typed in.
+  const editAt = (index: number, patch: Partial<Line>) =>
+    setLines((ls) => {
+      const next = [...ls];
+      while (next.length <= index) next.push(blankLine());
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  const clearAt = (index: number) => setLines((ls) => (ls.length <= 1 ? [blankLine()] : ls.filter((_, i) => i !== index)));
 
   // The stock panel follows the line being worked on, falling back to the last line that has an item.
-  const activeLine = lines.find((l) => l.rowId === activeRow && l.productId) ?? [...lines].reverse().find((l) => l.productId);
+  const activeLine = (activeIndex !== null && lines[activeIndex]?.productId ? lines[activeIndex] : undefined) ?? [...lines].reverse().find((l) => l.productId);
   const activeProduct = activeLine ? productOf(activeLine) : undefined;
   const takingNow = activeProduct
     ? lines.filter((l) => l.productId === activeProduct.id).reduce((sum, l) => sum.plus(linePieces(l, activeProduct)), D(0)).toString()
@@ -152,7 +152,13 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
 
   return (
     <div className="pb-44 lg:pb-28">
-      <h1 className="mb-4 text-xl font-semibold">New bill</h1>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1 className="mr-auto text-xl font-semibold">New bill</h1>
+        <div role="group" aria-label="Bill layout" className="inline-flex overflow-hidden rounded-md border">
+          <button type="button" aria-pressed={layout === "cards"} onClick={() => setLayout("cards")} className={`px-3 py-2 text-sm ${layout === "cards" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Cards</button>
+          <button type="button" aria-pressed={layout === "sheet"} onClick={() => setLayout("sheet")} className={`px-3 py-2 text-sm ${layout === "sheet" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Excel sheet</button>
+        </div>
+      </div>
       {order && <p className="mb-4 rounded-md bg-muted p-2 text-sm">Billing a pending order. The items below are what is still to be delivered. Change them if you are sending less.</p>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
@@ -176,19 +182,26 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             </div>
           </CardContent></Card>
 
+          {layout === "sheet" ? (
+            <BillSheet
+              products={products} lines={lines} filledLines={filledLines} preview={preview}
+              charges={charges} onCharges={setCharges} onEdit={editAt} onClear={clearAt} onActivate={setActiveIndex}
+            />
+          ) : (
+            <>
           {lines.map((line, index) => {
             const product = productOf(line);
             const pieces = linePieces(line, product);
             const previewIndex = filledLines.findIndex((l) => l.rowId === line.rowId);
             const pl = previewIndex >= 0 ? preview?.lines[previewIndex] : undefined;
             return (
-              <Card key={line.rowId} data-testid="bill-line" onFocusCapture={() => { setActiveRow(line.rowId); }}>
+              <Card key={line.rowId} data-testid="bill-line" onFocusCapture={() => setActiveIndex(index)}>
                 <CardContent className="space-y-3 pt-6">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Sl no {index + 1}</span>
                     {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((l) => l.rowId !== line.rowId))}>Remove</Button>}
                   </div>
-                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, unitPrice: "" }); setActiveRow(line.rowId); }} />
+                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, unitPrice: "" }); setActiveIndex(index); }} />
                   {product && (
                     <>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -211,17 +224,23 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             );
           })}
           <Button variant="outline" className="h-12 w-full" onClick={() => setLines([...lines, blankLine()])}>+ Add another item</Button>
+            </>
+          )}
 
           <Card><CardContent className="space-y-3 pt-6">
-            <Label>Extra charges (leave empty if none)</Label>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {CHARGE_FIELDS.map((c) => (
-                <div key={c.kind} className="space-y-1">
-                  <Label htmlFor={`charge-${c.kind}`} className="text-sm">{c.label}</Label>
-                  <Input id={`charge-${c.kind}`} className="h-12" inputMode="decimal" placeholder="0.00" value={charges[c.kind]} onChange={(e) => setCharges({ ...charges, [c.kind]: e.target.value })} />
+            {layout === "cards" && (
+              <>
+                <Label>Extra charges (leave empty if none)</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {CHARGE_FIELDS.map((c) => (
+                    <div key={c.kind} className="space-y-1">
+                      <Label htmlFor={`charge-${c.kind}`} className="text-sm">{c.label}</Label>
+                      <Input id={`charge-${c.kind}`} className="h-12" inputMode="decimal" placeholder="0.00" value={charges[c.kind]} onChange={(e) => setCharges({ ...charges, [c.kind]: e.target.value })} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="notes">Note on the bill (optional)</Label>
               <Input id="notes" className="h-11" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -230,7 +249,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
 
           {previewError && <p className="text-sm text-destructive">{previewError}</p>}
 
-          {preview && (
+          {preview && layout === "cards" && (
             <Card><CardContent className="space-y-1 pt-6 text-sm" data-testid="bill-totals">
               <Row label="Taxable value (items + charges)" value={formatINR(preview.taxableTotal)} />
               {preview.interState

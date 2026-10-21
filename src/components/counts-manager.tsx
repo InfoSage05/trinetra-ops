@@ -11,7 +11,7 @@ import { formatQuantity } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
 import { toPieces } from "@/lib/cartons";
 
-type Item = { id: string; name: string; sku: string; qtyPerCarton: number };
+type Item = { id: string; name: string; sku: string | null; qtyPerCarton: number };
 type Pending = { id: string; productName: string; countedQuantity: string; expectedQuantity: string; delta: string; countedAt: Date; movementsSinceCount: number; note: string | null };
 
 export function CountsManager({ items, pending, isOwner }: { items: Item[]; pending: Pending[]; isOwner: boolean }) {
@@ -47,7 +47,7 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
               <Label htmlFor="item">Item</Label>
               <select id="item" className="h-12 w-full rounded-md border bg-background px-3" value={productId} onChange={(e) => setProductId(e.target.value)} required>
                 <option value="">Choose item…</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.sku})</option>)}
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` (${i.sku})` : ""}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">

@@ -10,7 +10,9 @@ export default defineConfig({
   projects: [{ name: "phone", use: { ...devices["Pixel 7"] } }],
   webServer: {
     // dotenv-cli applies .env.test first, so the app talks to the throwaway test database.
+    // A separate build folder lets the tests run while a normal `npm run dev` is open.
     command: "npx dotenv run -f .env.test --override -- next dev -p 3100",
+    env: { NEXT_DIST_DIR: ".next-e2e" },
     url: "http://localhost:3100/api/health",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
