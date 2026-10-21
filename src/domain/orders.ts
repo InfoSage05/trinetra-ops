@@ -7,7 +7,7 @@ import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { D, ZERO, toFixed2 } from "@/lib/money";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { istDateParts } from "@/lib/time";
-import { entityId, idempotencyKey, nonNegativeQuantity, optionalText, parseInput, quantity } from "@/lib/validation";
+import { entityId, idempotencyKey, isoDate, nonNegativeQuantity, optionalText, parseInput, quantity } from "@/lib/validation";
 import { getStockLevels } from "@/domain/stock";
 
 /**
@@ -15,8 +15,6 @@ import { getStockLevels } from "@/domain/stock";
  * instead). What has been delivered is not stored: it is the quantity on bills raised against the order, so the
  * numbers can never disagree with the invoices.
  */
-
-const dateOnly = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the date the order is needed by.").refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), "Choose a real date.");
 
 export const orderLineSchema = z
   .object({ productId: entityId, quantity: quantity.optional(), cartons: nonNegativeQuantity.optional(), loosePieces: nonNegativeQuantity.optional() })
@@ -29,7 +27,7 @@ export const orderLineSchema = z
 
 export const createOrderSchema = z.object({
   customerId: entityId,
-  dueDate: dateOnly,
+  dueDate: isoDate,
   notes: optionalText(500),
   lines: z.array(orderLineSchema).min(1, "Add at least one item.").max(100),
   source: z.enum(["MANUAL", "TEXT", "VOICE"]).default("MANUAL"),

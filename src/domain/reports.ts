@@ -7,7 +7,7 @@ import { istDayRange } from "@/lib/time";
 import { parseInput } from "@/lib/validation";
 import { NotFoundError } from "@/lib/errors";
 import { getCurrentStock, getStockLevels } from "@/domain/stock";
-import { getPaymentSummaries, type PaymentStatus } from "@/domain/payments";
+import { getPaymentSummaries, listOutstandingBills, type PaymentStatus, type PaymentSummary } from "@/domain/payments";
 import { daysUntil, getOrderReminders } from "@/domain/orders";
 
 export type StockStatus = "NEGATIVE" | "LOW" | "OK";
@@ -49,9 +49,9 @@ export async function listPendingStockCounts(session: Session | null) {
 export async function getOwnerDashboard(session: Session | null) {
   requireRole(session, ["OWNER"]);
   const { start, end } = istDayRange();
-  const [todayBills, allBills, stock, irpIssues, pendingCounts, orderReminders] = await Promise.all([
+  const [todayBills, outstanding, stock, irpIssues, pendingCounts, orderReminders] = await Promise.all([
     prisma.bill.findMany({ where: { billDate: { gte: start, lt: end } }, select: { grandTotal: true } }),
-    prisma.bill.findMany({ select: { id: true, customerId: true, customerName: true } }),
+    listOutstandingBills(prisma),
     getStockOverview(session, {}),
     prisma.irpSubmission.findMany({
       where: { OR: [{ status: { in: ["FAILED", "REJECTED"] } }, { status: "PENDING", createdAt: { lt: new Date(Date.now() - 60 * 60_000) } }] },
@@ -62,13 +62,10 @@ export async function getOwnerDashboard(session: Session | null) {
     getOrderReminders(session),
   ]);
 
-  const summaries = await getPaymentSummaries(prisma, allBills.map((b) => b.id));
   const dueByCustomer = new Map<string, { customerId: string; customerName: string; amountDue: Decimal }>();
-  for (const b of allBills) {
-    const due = summaries.get(b.id)?.amountDue ?? ZERO;
-    if (due.lessThanOrEqualTo(0)) continue;
+  for (const b of outstanding) {
     const entry = dueByCustomer.get(b.customerId) ?? { customerId: b.customerId, customerName: b.customerName, amountDue: ZERO };
-    entry.amountDue = entry.amountDue.plus(due);
+    entry.amountDue = entry.amountDue.plus(b.amountDue);
     dueByCustomer.set(b.customerId, entry);
   }
   const dues = [...dueByCustomer.values()].sort((a, b) => b.amountDue.comparedTo(a.amountDue));
@@ -91,32 +88,55 @@ export async function getOwnerDashboard(session: Session | null) {
   };
 }
 
-export async function listBills(session: Session | null, rawInput: unknown = {}) {
+const BILLS_PER_PAGE = 50;
+
+/** One page of bills, newest first. `hasMore` says whether an older page exists. */
+export async function listBillsPage(session: Session | null, rawInput: unknown = {}) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(
     z.object({
       search: z.string().trim().optional(),
       status: z.enum(["PAID", "PARTIAL", "UNPAID", "DUE"]).optional(),
-      take: z.number().int().min(1).max(500).default(100),
+      page: z.number().int().min(1).max(10_000).default(1),
+      pageSize: z.number().int().min(1).max(500).default(BILLS_PER_PAGE),
     }),
     rawInput
   );
-  const bills = await prisma.bill.findMany({
-    where: input.search
-      ? { OR: [{ invoiceNumber: { contains: input.search, mode: "insensitive" } }, { customerName: { contains: input.search, mode: "insensitive" } }] }
-      : {},
-    orderBy: { billDate: "desc" },
-    // A status filter depends on payments, so it must see every match before the limit is applied.
-    ...(input.status ? {} : { take: input.take }),
-    select: { id: true, invoiceNumber: true, billDate: true, customerName: true, grandTotal: true },
-  });
-  const summaries = await getPaymentSummaries(prisma, bills.map((b) => b.id));
+  const skip = (input.page - 1) * input.pageSize;
+  const where = input.search
+    ? { OR: [{ invoiceNumber: { contains: input.search, mode: "insensitive" as const } }, { customerName: { contains: input.search, mode: "insensitive" as const } }] }
+    : {};
+  const select = { id: true, invoiceNumber: true, billDate: true, customerName: true, grandTotal: true } as const;
   const matches = (status: PaymentStatus) =>
     !input.status || (input.status === "DUE" ? status !== "PAID" : status === input.status);
-  return bills
-    .map((b) => ({ ...b, payment: summaries.get(b.id)! }))
-    .filter((b) => matches(b.payment.status))
-    .slice(0, input.take);
+
+  if (!input.status) {
+    const rows = await prisma.bill.findMany({ where, orderBy: { billDate: "desc" }, skip, take: input.pageSize + 1, select });
+    const page = rows.slice(0, input.pageSize);
+    const summaries = await getPaymentSummaries(prisma, page.map((b) => b.id));
+    return { bills: page.map((b) => ({ ...b, payment: summaries.get(b.id)! })), hasMore: rows.length > input.pageSize };
+  }
+
+  // A payment-status filter depends on payments, so walk the bills in batches until this page is full.
+  const wanted = skip + input.pageSize + 1;
+  const found: (Awaited<ReturnType<typeof prisma.bill.findMany<{ select: typeof select }>>>[number] & { payment: PaymentSummary })[] = [];
+  for (let offset = 0; found.length < wanted; offset += 200) {
+    const batch = await prisma.bill.findMany({ where, orderBy: { billDate: "desc" }, skip: offset, take: 200, select });
+    if (batch.length === 0) break;
+    const summaries = await getPaymentSummaries(prisma, batch.map((b) => b.id));
+    for (const b of batch) {
+      const payment = summaries.get(b.id)!;
+      if (matches(payment.status)) found.push({ ...b, payment });
+    }
+    if (batch.length < 200) break;
+  }
+  return { bills: found.slice(skip, skip + input.pageSize), hasMore: found.length > skip + input.pageSize };
+}
+
+export async function listBills(session: Session | null, rawInput: unknown = {}) {
+  const input = parseInput(z.object({ take: z.number().int().min(1).max(500).default(100) }).passthrough(), rawInput);
+  const { take, ...rest } = input;
+  return (await listBillsPage(session, { ...rest, pageSize: take })).bills;
 }
 
 /** One item: stock now, and its recent stock movements (what came in, what went out and why). Workers see no money. */

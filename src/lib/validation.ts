@@ -26,6 +26,16 @@ export const positiveInt = z
   .refine((v) => /^\d{1,5}$/.test(v) && Number(v) >= 1, "Enter a whole number of 1 or more.")
   .transform(Number);
 
+/** A calendar date typed as YYYY-MM-DD (what a date picker gives), checked to be a real day. */
+export const isoDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date.")
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(v);
+  }, "Choose a real date.");
+
 export const entityId = z.string().trim().min(1, "Required");
 export const idempotencyKey = z.string().trim().min(8).max(200);
 

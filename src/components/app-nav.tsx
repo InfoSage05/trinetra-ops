@@ -3,7 +3,7 @@ import type { Role } from "@/lib/auth";
 
 const OWNER_LINKS = [
   ["/dashboard", "Home"], ["/billing/new", "New bill"], ["/bills", "Bills"], ["/inventory", "Stock"], ["/orders", "Orders"], ["/assistant", "Smart entry"],
-  ["/customers", "Customers"], ["/products", "Products"], ["/settings", "Settings"],
+  ["/customers", "Customers"], ["/products", "Products"], ["/reports", "Reports"], ["/settings", "Settings"],
 ] as const;
 const WORKER_LINKS = [["/dashboard", "Home"], ["/inventory", "Stock"], ["/assistant", "Smart entry"], ["/inventory/counts", "Count stock"]] as const;
 

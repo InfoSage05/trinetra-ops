@@ -132,6 +132,7 @@ model StockLedgerEntry {
   createdAt       DateTime        @default(now())
 
   @@index([productId, createdAt])
+  @@index([createdAt])
   @@map("stock_ledger")
 }
 
@@ -183,7 +184,7 @@ model Bill {
   lineItems         BillLineItem[]
   charges           BillCharge[]
   orderId           String?
-  order             Order?            @relation(fields: [orderId], references: [id])
+  order             Order?            @relation(fields: [orderId], references: [id], onDelete: Restrict)
   payments          PaymentLogEntry[]
   creditNotes       CreditNote[]
   irpSubmission     IrpSubmission?
@@ -219,6 +220,7 @@ model BillLineItem {
   creditNoteLines   CreditNoteLine[]
 
   @@unique([billId, lineNo])
+  @@index([productId])
   @@map("bill_line_items")
 }
 
@@ -283,6 +285,7 @@ model CreditNote {
   irpSubmission    IrpSubmission?
 
   @@index([billId])
+  @@index([noteDate])
   @@map("credit_notes")
 }
 
@@ -301,6 +304,7 @@ model CreditNoteLine {
   lineTotal      Decimal      @db.Decimal(12, 2)
 
   @@index([billLineItemId])
+  @@index([creditNoteId])
   @@map("credit_note_lines")
 }
 
