@@ -93,6 +93,7 @@ model Product {
   sku                String             @unique
   name               String
   unit               String             @default("pcs")
+  qtyPerCarton       Int                @default(1)
   hsnCode            String
   unitPrice          Decimal            @db.Decimal(12, 2)
   gstRate            Decimal            @db.Decimal(5, 2)
@@ -172,6 +173,7 @@ model Bill {
   idempotencyKey    String            @unique
   createdAt         DateTime          @default(now())
   lineItems         BillLineItem[]
+  charges           BillCharge[]
   payments          PaymentLogEntry[]
   creditNotes       CreditNote[]
   irpSubmission     IrpSubmission?
@@ -192,6 +194,7 @@ model BillLineItem {
   productSku        String
   hsnCode           String
   unit              String
+  qtyPerCarton      Int              @default(1)
   quantity          Decimal          @db.Decimal(12, 2)
   unitPrice         Decimal          @db.Decimal(12, 2)
   discountAmount    Decimal          @default(0) @db.Decimal(12, 2)
@@ -206,6 +209,25 @@ model BillLineItem {
 
   @@unique([billId, lineNo])
   @@map("bill_line_items")
+}
+
+/// Extra charges on an invoice: carton packing, crate, freight (immutable, like the bill itself).
+model BillCharge {
+  id           String  @id @default(cuid())
+  billId       String
+  bill         Bill    @relation(fields: [billId], references: [id])
+  chargeNo     Int
+  kind         String // CARTON | CRATE | FREIGHT | OTHER
+  label        String
+  taxableValue Decimal @db.Decimal(12, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgstAmount   Decimal @db.Decimal(12, 2)
+  sgstAmount   Decimal @db.Decimal(12, 2)
+  igstAmount   Decimal @db.Decimal(12, 2)
+  lineTotal    Decimal @db.Decimal(12, 2)
+
+  @@unique([billId, chargeNo])
+  @@map("bill_charges")
 }
 
 model PaymentLogEntry {

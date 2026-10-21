@@ -19,6 +19,13 @@ export const positiveMoney = decimalField("Enter an amount greater than 0.", (n)
 export const signedMoney = decimalField("Enter a non-zero amount (use minus for a refund).", (n) => n !== 0);
 export const gstRate = decimalField("GST rate must be between 0 and 40.", (n) => n >= 0 && n <= 40);
 
+/** A whole number of at least 1 (e.g. pieces per carton). Accepts "24" or 24; yields a number. */
+export const positiveInt = z
+  .union([z.string(), z.number()])
+  .transform((v) => String(v).trim())
+  .refine((v) => /^\d{1,5}$/.test(v) && Number(v) >= 1, "Enter a whole number of 1 or more.")
+  .transform(Number);
+
 export const entityId = z.string().trim().min(1, "Required");
 export const idempotencyKey = z.string().trim().min(8).max(200);
 

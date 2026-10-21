@@ -3,12 +3,13 @@ import { prisma } from "@/lib/db";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError } from "@/lib/errors";
 import { toFixed2 } from "@/lib/money";
-import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, requiredText } from "@/lib/validation";
+import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, positiveInt, requiredText } from "@/lib/validation";
 
 export const productSchema = z.object({
   sku: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9_/-]{0,39}$/, "SKU may use letters, digits, - _ / (max 40)"),
   name: requiredText("Name", 120),
   unit: z.string().trim().min(1).max(20).default("pcs"),
+  qtyPerCarton: positiveInt.default(1),
   hsnCode,
   unitPrice: money,
   gstRate,

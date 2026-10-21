@@ -11,7 +11,7 @@ function pick(values: Record<string, string>, aliases: string[]): string | undef
   return undefined;
 }
 
-export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; unit?: string; reorderLevel?: string };
+export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; unit?: string; qtyPerCarton?: string; reorderLevel?: string };
 export type OpeningRowInput = { rowNumber: number; sku?: string; quantity?: string };
 
 export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
@@ -23,6 +23,7 @@ export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
     gstRate: pick(v, ["gst", "gstrate", "gstpercent", "taxrate"]),
     unitPrice: pick(v, ["price", "unitprice", "rate", "mrp"]),
     unit: pick(v, ["unit", "uom"]),
+    qtyPerCarton: pick(v, ["qtypercarton", "qtypercartoon", "piecespercarton", "pcspercarton", "pcspercartoon", "qtyperctn", "cartonsize", "cartonqty", "percarton"]),
     reorderLevel: pick(v, ["reorderlevel", "reorder", "minstock"]),
   }));
 }
