@@ -54,3 +54,6 @@ next-env.d.ts
 
 "~$*"
 "new in voice.xlsx"
+
+# Excel lock files
+~$*
