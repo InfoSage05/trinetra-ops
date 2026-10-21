@@ -159,6 +159,8 @@ export async function previewBill(session: Session | null, rawInput: unknown): P
 
 export const createBillSchema = billDraftSchema.extend({
   idempotencyKey,
+  /** Raised against a customer's pending order; the order's delivered quantity is worked out from its bills. */
+  orderId: entityId.optional(),
   confirmShortfall: z.boolean().default(false),
   initialPayment: z.object({ amount: positiveMoney, method: z.enum(PAYMENT_METHODS), reference: optionalText(100) }).optional(),
 });
@@ -192,6 +194,13 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
         throw new ValidationError("Payment received cannot be more than the bill total.");
       }
 
+      if (input.orderId) {
+        const order = await tx.order.findUnique({ where: { id: input.orderId } });
+        if (!order) throw new NotFoundError("Order");
+        if (order.customerId !== customer.id) throw new ValidationError("This order belongs to a different customer.");
+        if (order.cancelledAt || order.closedAt) throw new DomainError("ORDER_NOT_OPEN", "This order is cancelled or closed, so it cannot be billed.");
+      }
+
       const financialYear = financialYearOf();
       const invoiceNumber = await allocateNumber(tx, "INVOICE", financialYear);
 
@@ -207,7 +216,7 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
           taxableTotal: toFixed2(preview.taxableTotal), cgstTotal: toFixed2(preview.cgstTotal),
           sgstTotal: toFixed2(preview.sgstTotal), igstTotal: toFixed2(preview.igstTotal),
           taxTotal: toFixed2(preview.taxTotal), roundOff: toFixed2(preview.roundOff), grandTotal: toFixed2(preview.grandTotal),
-          createdBy: session.userId, idempotencyKey: key,
+          createdBy: session.userId, idempotencyKey: key, orderId: input.orderId ?? null,
           lineItems: {
             create: preview.lines.map((l, i) => ({
               lineNo: i + 1, productId: l.productId, productName: l.productName, productSku: l.productSku,

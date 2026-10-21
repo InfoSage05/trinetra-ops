@@ -17,6 +17,12 @@ enum ActorType {
   AGENT
 }
 
+enum OrderSource {
+  MANUAL
+  TEXT
+  VOICE
+}
+
 enum StockLedgerType {
   OPENING
   PRODUCED
@@ -83,6 +89,7 @@ model Customer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   bills          Bill[]
+  orders         Order[]
 
   @@index([name])
   @@map("customers")
@@ -104,6 +111,7 @@ model Product {
   stockLedgerEntries StockLedgerEntry[]
   stockCounts        StockCount[]
   billLineItems      BillLineItem[]
+  orderLines         OrderLine[]
 
   @@index([name])
   @@map("products")
@@ -174,11 +182,14 @@ model Bill {
   createdAt         DateTime          @default(now())
   lineItems         BillLineItem[]
   charges           BillCharge[]
+  orderId           String?
+  order             Order?            @relation(fields: [orderId], references: [id])
   payments          PaymentLogEntry[]
   creditNotes       CreditNote[]
   irpSubmission     IrpSubmission?
 
   @@index([customerId])
+  @@index([orderId])
   @@index([billDate])
   @@map("bills")
 }
@@ -332,4 +343,44 @@ model IrpSubmission {
 
   @@index([status, nextAttemptAt])
   @@map("irp_submissions")
+}
+
+/// A customer's request for goods due on a date. Lines never change; an order is cancelled or closed instead.
+/// How much has been delivered is worked out from the bills raised against the order, so it can never drift.
+model Order {
+  id             String      @id @default(cuid())
+  customerId     String
+  customer       Customer    @relation(fields: [customerId], references: [id])
+  dueDate        DateTime    @db.Date
+  notes          String?
+  source         OrderSource @default(MANUAL)
+  sourceText     String?
+  cancelledAt    DateTime?
+  closedAt       DateTime?
+  createdBy      String
+  actorType      ActorType   @default(HUMAN)
+  sourceMetadata Json?
+  idempotencyKey String      @unique
+  createdAt      DateTime    @default(now())
+  lines          OrderLine[]
+  bills          Bill[]
+
+  @@index([customerId])
+  @@index([dueDate])
+  @@map("orders")
+}
+
+model OrderLine {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  lineNo    Int
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  /// Ordered quantity in pieces (cartons are worked out with the item's carton size).
+  quantity  Decimal @db.Decimal(12, 2)
+
+  @@unique([orderId, lineNo])
+  @@index([productId])
+  @@map("order_lines")
 }
