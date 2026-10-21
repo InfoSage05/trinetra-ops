@@ -7,7 +7,7 @@ import { Field } from "@/components/field";
 import { StateSelect } from "@/components/state-select";
 import { createCustomerAction, updateCustomerAction } from "@/actions/customers";
 import { callAction } from "@/lib/client/call-action";
-import { isValidGstin, stateCodeFromGstin } from "@/lib/gst";
+import { cleanGstin, isValidGstin, stateCodeFromGstin } from "@/lib/gst";
 
 export type CustomerFormValue = { id?: string; name: string; phone: string; gstin: string; billingAddress: string; stateCode: string };
 export type SavedCustomer = { id: string; name: string; phone: string | null; gstin: string | null; billingAddress: string; stateCode: string };
@@ -18,7 +18,7 @@ export function CustomerDialog({ open, initial, onClose, onSaved }: {
   const [c, setC] = useState(initial);
 
   function onGstin(value: string) {
-    const gstin = value.trim().toUpperCase();
+    const gstin = cleanGstin(value);
     setC({ ...c, gstin, stateCode: isValidGstin(gstin) ? stateCodeFromGstin(gstin) : c.stateCode });
   }
 

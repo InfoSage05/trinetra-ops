@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma, type Db } from "@/lib/db";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError } from "@/lib/errors";
-import { isValidGstin, stateCodeFromGstin } from "@/lib/gst";
+import { cleanGstin, gstinProblem, stateCodeFromGstin } from "@/lib/gst";
 import { financialYearOf } from "@/lib/time";
 import { optionalText, parseInput, phone, requiredText } from "@/lib/validation";
 import type { NumberSeriesType } from "@/domain/numbering";
@@ -10,7 +10,10 @@ import type { NumberSeriesType } from "@/domain/numbering";
 export const businessProfileSchema = z.object({
   legalName: requiredText("Legal name"),
   tradeName: optionalText(200),
-  gstin: z.string().trim().toUpperCase().refine(isValidGstin, "GSTIN is not valid. Check for typos."),
+  gstin: z.string().transform(cleanGstin).superRefine((v, ctx) => {
+    const problem = gstinProblem(v);
+    if (problem) ctx.addIssue({ code: "custom", message: problem });
+  }),
   addressLine1: requiredText("Address", 200),
   addressLine2: optionalText(200),
   city: requiredText("City", 100),

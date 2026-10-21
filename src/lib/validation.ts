@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ValidationError } from "@/lib/errors";
-import { isValidGstin, isValidHsn, isValidStateCode } from "@/lib/gst";
+import { cleanGstin, gstinProblem, isValidHsn, isValidStateCode } from "@/lib/gst";
 
 const DECIMAL_2DP = /^-?\d{1,10}(\.\d{1,2})?$/;
 
@@ -54,11 +54,13 @@ export const stateCode = z.string().trim().refine(isValidStateCode, "Choose a st
 
 export const optionalGstin = z
   .string()
-  .trim()
-  .toUpperCase()
   .optional()
+  .transform((v) => (v ? cleanGstin(v) : undefined))
   .transform((v) => (v ? v : undefined))
-  .refine((v) => v === undefined || isValidGstin(v), "GSTIN is not valid. Check for typos.");
+  .superRefine((v, ctx) => {
+    const problem = v === undefined ? null : gstinProblem(v);
+    if (problem) ctx.addIssue({ code: "custom", message: problem });
+  });
 
 export const hsnCode = z.string().trim().refine(isValidHsn, "HSN must be 4, 6 or 8 digits");
 

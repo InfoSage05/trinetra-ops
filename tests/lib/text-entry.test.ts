@@ -59,3 +59,19 @@ describe("toPieces", () => {
     expect(toPieces("1,5", "", 12)).toBe("0");
   });
 });
+
+describe("GSTIN entry", () => {
+  it("ignores spaces and invisible characters and explains what is wrong", async () => {
+    const { businessProfileSchema } = await import("@/domain/settings");
+    const base = { legalName: "T", addressLine1: "a", city: "c", pincode: "756001", invoiceTerms: "", bankDetails: "" };
+    const ok = (g: string) => {
+      const r = businessProfileSchema.safeParse({ ...base, gstin: g });
+      return { success: r.success || !r.error.issues.some((i) => i.path[0] === "gstin"), error: r.success ? undefined : { issues: r.error.issues.filter((i) => i.path[0] === "gstin") } };
+    };
+    expect(ok("21ASKPD3583H1ZX").success).toBe(true);
+    expect(ok(" 21askpd3583h1zx ​").success).toBe(true);
+    const bad = ok("21ASKPD3583HIZX");
+    expect(bad.success).toBe(false);
+    expect(JSON.stringify(bad.error?.issues)).toContain("typo");
+  });
+});
