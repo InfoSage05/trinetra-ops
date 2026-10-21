@@ -1,12 +1,12 @@
 /**
  * Pre-filled business details taken from the owner's invoice template ("new in voice.xlsx").
  * Used only to prefill the Settings form the first time; the owner reviews and saves them.
- * The GSTIN is deliberately left empty: the number on the sheet (21ASKPD3583HIZX) fails the official checksum,
- * and a guessed number must never end up on a tax invoice. The owner types it from the registration certificate.
+ * The GSTIN was confirmed against the registration certificate by the owner on 2026-10-21; the sheet had the letter I
+ * where the digit 1 belongs.
  */
 export const TRINETRA_DEFAULTS = {
   legalName: "Trinetra Candles",
-  gstin: "",
+  gstin: "21ASKPD3583H1ZX",
   addressLine1: "Kalayan Nagar, Angaragadia",
   city: "Balasore",
   pincode: "756001",
