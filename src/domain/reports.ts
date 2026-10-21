@@ -8,6 +8,7 @@ import { parseInput } from "@/lib/validation";
 import { NotFoundError } from "@/lib/errors";
 import { getCurrentStock, getStockLevels } from "@/domain/stock";
 import { getPaymentSummaries, type PaymentStatus } from "@/domain/payments";
+import { daysUntil, getOrderReminders } from "@/domain/orders";
 
 export type StockStatus = "NEGATIVE" | "LOW" | "OK";
 
@@ -48,7 +49,7 @@ export async function listPendingStockCounts(session: Session | null) {
 export async function getOwnerDashboard(session: Session | null) {
   requireRole(session, ["OWNER"]);
   const { start, end } = istDayRange();
-  const [todayBills, allBills, stock, irpIssues, pendingCounts] = await Promise.all([
+  const [todayBills, allBills, stock, irpIssues, pendingCounts, orderReminders] = await Promise.all([
     prisma.bill.findMany({ where: { billDate: { gte: start, lt: end } }, select: { grandTotal: true } }),
     prisma.bill.findMany({ select: { id: true, customerId: true, customerName: true } }),
     getStockOverview(session, {}),
@@ -58,6 +59,7 @@ export async function getOwnerDashboard(session: Session | null) {
       orderBy: { createdAt: "asc" },
     }),
     listPendingStockCounts(session),
+    getOrderReminders(session),
   ]);
 
   const summaries = await getPaymentSummaries(prisma, allBills.map((b) => b.id));
@@ -83,6 +85,9 @@ export async function getOwnerDashboard(session: Session | null) {
       billId: j.billId,
     })),
     pendingCounts,
+    orderReminders: orderReminders.map((o) => ({
+      id: o.id, customerName: o.customer.name, dueDate: o.dueDate, overdue: o.dueState === "OVERDUE", daysLeft: daysUntil(o.dueDate),
+    })),
   };
 }
 

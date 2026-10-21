@@ -26,6 +26,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <p className="text-sm text-muted-foreground">{customer.billingAddress}</p>
         </div>
         <Link href={`/billing/new?customer=${customer.id}`} className={buttonVariants({ size: "lg" })}>New bill for this customer</Link>
+        <Link href={`/orders/new?customer=${customer.id}`} className={buttonVariants({ variant: "outline", size: "lg" })}>New order</Link>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

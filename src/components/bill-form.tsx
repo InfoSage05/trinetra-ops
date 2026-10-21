@@ -19,7 +19,7 @@ import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
-import { toPieces } from "@/lib/cartons";
+import { splitCartons, toPieces } from "@/lib/cartons";
 import { D, amountInWords, formatINR, formatQuantity } from "@/lib/money";
 
 type Line = { rowId: number; productId: string; cartons: string; loosePieces: string; unitPrice: string; discountAmount: string };
@@ -42,16 +42,28 @@ function linePieces(line: Line, product: BillableProduct | undefined): string {
   try { return toPieces(line.cartons, line.loosePieces, product.qtyPerCarton); } catch { return "0"; }
 }
 
-type Props = { products: BillableProduct[]; businessStateCode: string; initialCustomer?: SavedCustomer | null; initialProductId?: string };
+type Props = {
+  products: BillableProduct[]; businessStateCode: string; initialCustomer?: SavedCustomer | null; initialProductId?: string;
+  /** A pending order being billed: its id and what is still to be delivered, in pieces. */
+  order?: { id: string; lines: { productId: string; pieces: string }[] };
+};
 
-export function BillForm({ products, businessStateCode, initialCustomer = null, initialProductId }: Props) {
+export function BillForm({ products, businessStateCode, initialCustomer = null, initialProductId, order }: Props) {
   const router = useRouter();
   const [key, renewKey] = useIdempotencyKey();
   const [customer, setCustomer] = useState<SavedCustomer | null>(initialCustomer);
   const [placeOfSupply, setPlaceOfSupply] = useState(initialCustomer?.stateCode ?? businessStateCode);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<Line[]>(() => [blankLine(initialProductId)]);
+  const [lines, setLines] = useState<Line[]>(() => {
+    const fromOrder = (order?.lines ?? []).flatMap((l) => {
+      const product = products.find((p) => p.id === l.productId);
+      if (!product) return [];
+      const { cartons, pieces } = splitCartons(l.pieces, product.qtyPerCarton);
+      return [{ ...blankLine(product.id), cartons: String(cartons), loosePieces: pieces ? String(pieces) : "" }];
+    });
+    return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
+  });
   const [charges, setCharges] = useState<Record<ChargeKey, string>>({ CARTON: "", CRATE: "", FREIGHT: "" });
   const [activeRow, setActiveRow] = useState<number | null>(null);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
@@ -117,7 +129,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     let result;
     try {
       result = await createBillAction({
-        ...draft, idempotencyKey: key, confirmShortfall,
+        ...draft, idempotencyKey: key, confirmShortfall, ...(order ? { orderId: order.id } : {}),
         ...(amount && Number(amount) > 0 ? { initialPayment: { amount, method } } : {}),
       });
     } catch {
@@ -141,6 +153,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   return (
     <div className="pb-44 lg:pb-28">
       <h1 className="mb-4 text-xl font-semibold">New bill</h1>
+      {order && <p className="mb-4 rounded-md bg-muted p-2 text-sm">Billing a pending order. The items below are what is still to be delivered. Change them if you are sending less.</p>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
           <Card><CardContent className="space-y-3 pt-6">

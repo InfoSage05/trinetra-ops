@@ -18,3 +18,16 @@ export function invoiceShareText(v: {
   if (v.upiPayUri && Number(v.amountDue) > 0) lines.push(`Pay by UPI: ${v.upiPayUri}`);
   return lines.join("\n");
 }
+
+/** A friendly reminder the owner can send to a customer about a pending order. */
+export function orderReminderText(v: {
+  supplierName: string; customerName: string; dueDate: string; overdue: boolean;
+  lines: { name: string; cartons: string }[];
+}): string {
+  return [
+    `${v.supplierName}`,
+    `Hello ${v.customerName}, ${v.overdue ? "your order was due on" : "a reminder about your order due on"} ${v.dueDate}:`,
+    ...v.lines.map((l) => `• ${l.name}: ${l.cartons}`),
+    "Please let us know when you would like it delivered. Thank you!",
+  ].join("\n");
+}

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Plain } from "@/lib/action-result";
 import type { getOwnerDashboard } from "@/domain/reports";
 import { formatINR, formatQuantity } from "@/lib/money";
+import { formatDateIN } from "@/lib/time";
 
 type Data = Plain<Awaited<ReturnType<typeof getOwnerDashboard>>>;
 
@@ -34,6 +35,22 @@ export function OwnerDashboard({ data }: { data: Data }) {
             {data.pendingCounts.length > 0 && (
               <p><Badge>Counts</Badge> {data.pendingCounts.length} stock count(s) waiting. <Link className="underline" href="/inventory/counts">Review</Link></p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {data.orderReminders.length > 0 && (
+        <Card data-testid="order-reminders">
+          <CardHeader><CardTitle>Orders to deliver soon</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {data.orderReminders.map((o) => (
+              <p key={o.id} className="flex flex-wrap items-center gap-2">
+                <Link className="mr-auto underline" href={`/orders/${o.id}`}>{o.customerName}</Link>
+                <span>{formatDateIN(new Date(o.dueDate))}</span>
+                {o.overdue ? <Badge variant="destructive">Overdue</Badge> : <Badge className="bg-amber-500">{o.daysLeft === 0 ? "Today" : o.daysLeft === 1 ? "Tomorrow" : `In ${o.daysLeft} days`}</Badge>}
+              </p>
+            ))}
+            <Link className="underline" href="/orders">All orders</Link>
           </CardContent>
         </Card>
       )}

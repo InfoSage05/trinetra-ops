@@ -4,14 +4,15 @@ import { toPlain } from "@/lib/action-result";
 import { getSession } from "@/lib/session";
 import { listBillableProducts } from "@/domain/billing";
 import { getCustomer } from "@/domain/customers";
+import { getOrder } from "@/domain/orders";
 import { getBusinessProfile, getNumberSeriesStatus } from "@/domain/settings";
 import { BillForm } from "@/components/bill-form";
 
-type SearchParams = Promise<{ customer?: string; product?: string }>;
+type SearchParams = Promise<{ customer?: string; product?: string; order?: string }>;
 
 export default async function NewBillPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
-  const { customer: customerId, product: productId } = await searchParams;
+  const { customer: customerId, product: productId, order: orderId } = await searchParams;
   const [profile, series] = await Promise.all([getBusinessProfile(prisma), getNumberSeriesStatus(prisma)]);
   const invoiceSeriesReady = series.find((s) => s.series === "INVOICE")?.exists;
   if (!profile || !invoiceSeriesReady) {
@@ -25,7 +26,12 @@ export default async function NewBillPage({ searchParams }: { searchParams: Sear
   }
   const products = toPlain(await listBillableProducts(session));
   // A link from a customer or item page opens the form already filled in; a bad id just opens an empty form.
-  const initialCustomer = customerId ? await getCustomer(session, customerId).then(toPlain, () => null) : null;
+  // Billing a pending order fills in the customer and whatever is still to be delivered.
+  const order = orderId ? await getOrder(session, orderId).catch(() => null) : null;
+  const openOrder = order?.open ? order : null;
+  const initialCustomer = openOrder
+    ? await getCustomer(session, openOrder.customer.id).then(toPlain, () => null)
+    : customerId ? await getCustomer(session, customerId).then(toPlain, () => null) : null;
   const initialProductId = products.some((p) => p.id === productId) ? productId : undefined;
   return (
     <BillForm
@@ -36,6 +42,10 @@ export default async function NewBillPage({ searchParams }: { searchParams: Sear
         billingAddress: initialCustomer.billingAddress, stateCode: initialCustomer.stateCode,
       } : null}
       initialProductId={initialProductId}
+      order={openOrder ? {
+        id: openOrder.id,
+        lines: openOrder.lines.filter((l) => l.outstanding.greaterThan(0)).map((l) => ({ productId: l.productId, pieces: l.outstanding.toString() })),
+      } : undefined}
     />
   );
 }
