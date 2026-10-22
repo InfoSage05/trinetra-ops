@@ -10,7 +10,7 @@ export default async function InventoryPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-semibold">Stock</h1>
+        <h1 className="mr-auto">Stock</h1>
         <Link href="/inventory/counts" className="underline">Count stock</Link>
         {session?.role === "OWNER" && <Link href="/inventory/opening-import" className="underline">Opening stock import</Link>}
       </div>

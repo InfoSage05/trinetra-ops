@@ -41,7 +41,7 @@ export function CustomerDialog({ open, initial, onClose, onSaved }: {
           <div className="space-y-1.5"><Label htmlFor="cstate">State</Label><StateSelect id="cstate" value={c.stateCode} onChange={(stateCode) => setC({ ...c, stateCode })} /></div>
           <div className="space-y-1.5">
             <Label htmlFor="ctier">Rate this customer is billed at</Label>
-            <select id="ctier" className="h-12 w-full rounded-md border bg-background px-2" value={c.rateTier} onChange={(e) => setC({ ...c, rateTier: e.target.value as RateTier })}>
+            <select id="ctier" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 outline-none focus-visible:border-ring" value={c.rateTier} onChange={(e) => setC({ ...c, rateTier: e.target.value as RateTier })}>
               {RATE_TIERS.map((t) => <option key={t} value={t}>{RATE_TIER_LABELS[t]}</option>)}
             </select>
             <p className="text-xs text-muted-foreground">New bills for this customer start with this rate. You can still change the rate on any bill.</p>

@@ -17,7 +17,7 @@ export default async function SettingsPage() {
   }));
   return (
     <div className="space-y-8">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <h1>Settings</h1>
       <BusinessProfileForm initial={profile} />
       <NumberSeriesCard rows={rows} />
       <Link href="/users" className="inline-block underline">Manage worker logins →</Link>

@@ -38,14 +38,14 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Count stock</h1>
+      <h1>Count stock</h1>
       <Card>
         <CardHeader><CardTitle>Enter what you physically counted</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid gap-3">
             <div className="space-y-1">
               <Label htmlFor="item">Item</Label>
-              <select id="item" className="h-12 w-full rounded-md border bg-background px-3" value={productId} onChange={(e) => setProductId(e.target.value)} required>
+              <select id="item" className="h-12 w-full rounded-lg border border-input bg-card px-3 outline-none focus-visible:border-ring" value={productId} onChange={(e) => setProductId(e.target.value)} required>
                 <option value="">Choose item…</option>
                 {items.map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` (${i.sku})` : ""}</option>)}
               </select>
@@ -66,12 +66,12 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
           <CardHeader><CardTitle>Waiting for your approval ({pending.length})</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {pending.map((c) => (
-              <div key={c.id} className="rounded-md border p-3">
+              <div key={c.id} className="rounded-lg bg-muted/50 p-3">
                 <p className="font-medium">{c.productName}</p>
                 <p className="text-sm">Counted {formatQuantity(c.countedQuantity)}, system showed {formatQuantity(c.expectedQuantity)}: change <b>{Number(c.delta) > 0 ? "+" : ""}{formatQuantity(c.delta)}</b> · {formatDateIN(new Date(c.countedAt))}</p>
                 {c.note && <p className="text-sm text-muted-foreground">“{c.note}”</p>}
                 {c.movementsSinceCount > 0 && (
-                  <p className="text-sm text-amber-700">{c.movementsSinceCount} stock change(s) were recorded after this count. Approving applies only the difference found when counting.</p>
+                  <p className="rounded-lg bg-warning/10 px-2 py-1.5 text-sm text-warning-foreground">{c.movementsSinceCount} stock change(s) were recorded after this count. Approving applies only the difference found when counting.</p>
                 )}
                 <div className="mt-2 flex gap-2">
                   <Button onClick={async () => { if (await callAction(approveStockCountAction({ stockCountId: c.id }), { success: "Stock updated" })) router.refresh(); }}>Approve</Button>

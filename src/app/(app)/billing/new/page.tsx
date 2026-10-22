@@ -17,8 +17,8 @@ export default async function NewBillPage({ searchParams }: { searchParams: Sear
   const invoiceSeriesReady = series.find((s) => s.series === "INVOICE")?.exists;
   if (!profile || !invoiceSeriesReady) {
     return (
-      <div className="space-y-3 rounded-md border bg-background p-6">
-        <h1 className="text-xl font-semibold">One-time setup needed</h1>
+      <div className="space-y-3 rounded-xl bg-card p-6 ring-1 ring-foreground/10 shadow-[0_2px_10px_rgb(64_38_16/0.06)]">
+        <h1>One-time setup needed</h1>
         <p>Before the first bill, fill in business details and set up the invoice number series.</p>
         <Link className="underline" href="/settings">Go to Settings →</Link>
       </div>

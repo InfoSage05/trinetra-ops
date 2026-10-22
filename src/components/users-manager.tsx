@@ -29,8 +29,8 @@ export function UsersManager({ users, currentUserId }: { users: User[]; currentU
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Logins</h1>
-      <ul className="divide-y rounded-md border bg-background">
+      <h1>Logins</h1>
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {users.map((u) => (
           <li key={u.id} className="flex flex-wrap items-center gap-2 p-3">
             <div className="mr-auto">

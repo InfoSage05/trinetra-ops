@@ -23,11 +23,11 @@ export function CustomersManager({ customers }: { customers: ListedCustomer[] })
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">Customers</h1>
+        <h1 className="mr-auto">Customers</h1>
         <Button onClick={() => setEditing({ ...BLANK })}>Add customer</Button>
       </div>
       <Input placeholder="Search name, mobile or GSTIN" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
-      <ul className="divide-y rounded-md border bg-background">
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {visible.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">

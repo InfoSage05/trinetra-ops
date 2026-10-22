@@ -89,7 +89,7 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
   if (!draft) {
     return (
       <div className="space-y-4">
-        <section className="space-y-2 rounded-md border bg-background p-4">
+        <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
           <h2 className="font-semibold">Say or type the order</h2>
           <p className="text-sm text-muted-foreground">
             For example: “Sharma Traders, 5 carton rose, 3 carton birthday, by 5 Nov”. {aiAvailable ? "The AI assistant reads it." : "Simple matching reads it (no AI key set)."}
@@ -104,14 +104,14 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
           </div>
         </section>
 
-        <section className="space-y-2 rounded-md border bg-background p-4">
+        <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
           <h2 className="font-semibold">Upload a photo of the order</h2>
           {visionAvailable ? (
             <>
               <p className="text-sm text-muted-foreground">A photo or screenshot of a handwritten or printed order. It is turned into an order for you to check; nothing is saved until you press Save order.</p>
               <div className="space-y-1.5">
                 <Label htmlFor="photo-customer">Whose order is it? (optional, the photo may say)</Label>
-                <select id="photo-customer" className="h-12 w-full rounded-md border bg-background px-2" value={photoCustomer} onChange={(e) => setPhotoCustomer(e.target.value)}>
+                <select id="photo-customer" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 outline-none focus-visible:border-ring" value={photoCustomer} onChange={(e) => setPhotoCustomer(e.target.value)}>
                   <option value="">Read it from the photo</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -139,10 +139,10 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
       <p className="text-sm text-muted-foreground">
         {draft.channel === "MANUAL" ? "Fill in the order." : `${draft.extractor === "LLM" ? "Read by the AI assistant." : "Read by simple matching."} Check everything. Nothing is saved until you press Save order.`}
       </p>
-      {draft.notes.map((n) => <p key={n} className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{n}</p>)}
+      {draft.notes.map((n) => <p key={n} className="rounded-lg bg-warning/15 p-2 text-sm text-warning-foreground">{n}</p>)}
       <div className="space-y-1.5">
         <Label htmlFor="order-customer">Customer</Label>
-        <select id="order-customer" className="h-12 w-full rounded-md border bg-background px-2" value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}>
+        <select id="order-customer" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 outline-none focus-visible:border-ring" value={draft.customerId} onChange={(e) => setDraft({ ...draft, customerId: e.target.value })}>
           <option value="">Choose customer…</option>
           {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>

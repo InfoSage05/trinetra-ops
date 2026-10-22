@@ -51,19 +51,19 @@ export function ProductsManager({ products }: { products: Product[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">Products</h1>
+        <h1 className="mr-auto">Products</h1>
         <Button variant="outline" onClick={() => setBump({ percent: "", tiers: ["A", "B", "C"] })}>Change all rates by %</Button>
         <Button variant="outline" onClick={() => setGstAll("5")}>Set GST for all items</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}>Import from Excel</Button>
         <Button onClick={() => setEditing({ ...EMPTY })}>Add product</Button>
       </div>
-      <div role="group" aria-label="Products view" className="inline-flex overflow-hidden rounded-md border">
-        <button type="button" aria-pressed={view === "items"} onClick={() => setView("items")} className={`px-3 py-2 text-sm ${view === "items" ? "bg-primary text-primary-foreground" : "bg-background"}`}>All details</button>
-        <button type="button" aria-pressed={view === "rates"} onClick={() => setView("rates")} className={`px-3 py-2 text-sm ${view === "rates" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Rates and names</button>
+      <div role="group" aria-label="Products view" className="inline-flex rounded-lg bg-muted p-1 shadow-[inset_0_1px_2px_rgb(64_38_16/0.06)]">
+        <button type="button" aria-pressed={view === "items"} onClick={() => setView("items")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "items" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>All details</button>
+        <button type="button" aria-pressed={view === "rates"} onClick={() => setView("rates")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "rates" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Rates and names</button>
       </div>
       {view === "rates" && <RatesTable items={products} />}
       {view === "items" && <Input placeholder="Search name or code" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />}
-      {view === "items" && <ul className="divide-y rounded-md border bg-background">
+      {view === "items" && <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {visible.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">

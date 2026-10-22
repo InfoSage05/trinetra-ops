@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/session";
 import { formatINR } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
@@ -15,25 +16,25 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
   const pageLink = (p: number) => `/bills?${new URLSearchParams({ ...(q ? { q } : {}), ...(validStatus ? { status: validStatus } : {}), page: String(p) })}`;
   return (
     <div className="space-y-4">
-      <div className="flex items-center"><h1 className="mr-auto text-xl font-semibold">Bills</h1><Link className="underline" href="/billing/new">New bill</Link></div>
+      <div className="flex items-center"><h1 className="mr-auto">Bills</h1><Link href="/billing/new" className={buttonVariants({ size: "default" })}>New bill</Link></div>
       <form className="flex flex-wrap gap-2">
-        <input name="q" defaultValue={q} placeholder="Invoice no. or customer" className="h-11 flex-1 rounded-md border bg-background px-3" />
-        <select name="status" defaultValue={validStatus ?? ""} className="h-11 rounded-md border bg-background px-2">
+        <input name="q" defaultValue={q} placeholder="Invoice no. or customer" className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-card px-3 text-sm shadow-[inset_0_1px_1px_rgb(64_38_16/0.03)] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" />
+        <select name="status" defaultValue={validStatus ?? ""} className="h-10 rounded-lg border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30">
           <option value="">All</option><option value="DUE">Money due (unpaid + part paid)</option><option value="UNPAID">Unpaid</option><option value="PARTIAL">Part paid</option><option value="PAID">Paid</option>
         </select>
-        <button className="h-11 rounded-md border bg-background px-4">Search</button>
+        <button className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/50">Search</button>
       </form>
-      <ul className="divide-y rounded-md border bg-background">
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10">
         {bills.map((b) => (
           <li key={b.id}>
-            <Link href={`/bills/${b.id}`} className="flex flex-wrap items-center gap-2 p-3 hover:bg-muted/50">
-              <div className="mr-auto"><p className="font-medium">{b.invoiceNumber} · {b.customerName}</p><p className="text-sm text-muted-foreground">{formatDateIN(b.billDate)}</p></div>
-              <div className="text-right"><p className="font-medium">{formatINR(b.grandTotal)}</p>
-                <Badge variant={b.payment.status === "PAID" ? "secondary" : "destructive"}>{STATUS_LABEL[b.payment.status]}{b.payment.status !== "PAID" ? ` · due ${formatINR(b.payment.amountDue)}` : ""}</Badge></div>
+            <Link href={`/bills/${b.id}`} className="flex flex-wrap items-center gap-2 p-4 transition-colors hover:bg-amber-500/[0.06]">
+              <div className="mr-auto min-w-0"><p className="font-medium">{b.invoiceNumber} · {b.customerName}</p><p className="text-sm text-muted-foreground">{formatDateIN(b.billDate)}</p></div>
+              <div className="text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
+                <Badge variant={b.payment.status === "PAID" ? "success" : "destructive"}>{STATUS_LABEL[b.payment.status]}{b.payment.status !== "PAID" ? ` · due ${formatINR(b.payment.amountDue)}` : ""}</Badge></div>
             </Link>
           </li>
         ))}
-        {bills.length === 0 && <li className="p-6 text-center text-muted-foreground">No bills found.</li>}
+        {bills.length === 0 && <li className="p-8 text-center text-muted-foreground">No bills found.</li>}
       </ul>
       {(page > 1 || hasMore) && (
         <div className="flex justify-between text-sm">

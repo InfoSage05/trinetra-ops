@@ -162,13 +162,13 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   return (
     <div className="pb-44 lg:pb-28">
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-semibold">New bill</h1>
-        <div role="group" aria-label="Bill layout" className="inline-flex overflow-hidden rounded-md border">
-          <button type="button" aria-pressed={layout === "cards"} onClick={() => setLayout("cards")} className={`px-3 py-2 text-sm ${layout === "cards" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Cards</button>
-          <button type="button" aria-pressed={layout === "sheet"} onClick={() => setLayout("sheet")} className={`px-3 py-2 text-sm ${layout === "sheet" ? "bg-primary text-primary-foreground" : "bg-background"}`}>Excel sheet</button>
+        <h1 className="mr-auto">New bill</h1>
+        <div role="group" aria-label="Bill layout" className="inline-flex rounded-lg bg-muted p-1 shadow-[inset_0_1px_2px_rgb(64_38_16/0.06)]">
+          <button type="button" aria-pressed={layout === "cards"} onClick={() => setLayout("cards")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${layout === "cards" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Cards</button>
+          <button type="button" aria-pressed={layout === "sheet"} onClick={() => setLayout("sheet")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${layout === "sheet" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Excel sheet</button>
         </div>
       </div>
-      {order && <p className="mb-4 rounded-md bg-muted p-2 text-sm">Billing a pending order. The items below are what is still to be delivered. Change them if you are sending less.</p>}
+      {order && <p className="mb-4 rounded-xl bg-info/10 px-3.5 py-2.5 text-sm text-info-foreground ring-1 ring-info/20" data-testid="order-banner">Billing a pending order. The items below are what is still to be delivered. Change them if you are sending less.</p>}
       <div className={`grid gap-4 ${sideStock ? "lg:grid-cols-[minmax(0,1fr)_20rem]" : "grid-cols-[minmax(0,1fr)]"}`}>
         <div className="space-y-4">
           <Card><CardContent className="space-y-3 pt-6">
@@ -229,7 +229,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                         <div className="space-y-1"><Label>Quantity</Label><Input aria-label="Quantity" className="h-12 text-lg" inputMode="decimal" value={line.qty} onChange={(e) => update(line.rowId, { qty: e.target.value })} /></div>
                         <div className="space-y-1">
                           <Label>Unit</Label>
-                          <select aria-label="Unit" className="h-12 w-full rounded-md border bg-background px-2 text-lg" value={line.unit} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); update(line.rowId, { unit: e.target.value as QtyUnit }); }}>
+                          <select aria-label="Unit" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 text-lg outline-none focus-visible:border-ring" value={line.unit} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); update(line.rowId, { unit: e.target.value as QtyUnit }); }}>
                             {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                           </select>
                         </div>
@@ -315,9 +315,9 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t bg-background p-3">
+      <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border/80 bg-background/85 p-3 backdrop-blur-md [box-shadow:0_-10px_32px_-16px_rgb(64_38_16/0.22)]">
         <div className={`mx-auto max-w-5xl ${sideStock ? "lg:hidden" : ""}`}><StockBar product={activeProduct} availableNow={stockNow} takingNow={takingNow} /></div>
-        <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl text-lg" disabled={saving} onClick={() => save(false)}>
+        <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl text-lg font-semibold shadow-[0_10px_30px_-10px_color-mix(in_oklab,var(--color-primary)_65%,transparent)]" disabled={saving} onClick={() => save(false)}>
           {saving ? "Saving…" : preview ? `Save bill · ${formatINR(preview.grandTotal)}` : "Save bill"}
         </Button>
       </div>

@@ -19,7 +19,7 @@ export function GstSummary({ preview }: { preview: Plain<BillPreview> | null }) 
   const list = [...rows.values()].sort((a, b) => Number(a.rate) - Number(b.rate));
 
   return (
-    <div className="rounded-md border bg-background p-4" data-testid="gst-summary">
+    <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]" data-testid="gst-summary">
       <h2 className="mb-2 font-semibold">GST rates on this bill</h2>
       {list.length === 0 ? (
         <p className="text-sm text-muted-foreground">Add items to see the GST rate and the tax for each rate.</p>

@@ -20,7 +20,7 @@ export function OpeningImport() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Opening stock import</h1>
+      <h1>Opening stock import</h1>
       <p className="text-sm text-muted-foreground">
         Use once, on the day you switch over: upload an Excel/CSV with columns <b>SKU</b> and <b>Quantity</b> counted that day.
         Products must already exist (import them on the Products page first). Re-uploading the same file is harmless.

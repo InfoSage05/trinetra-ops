@@ -31,14 +31,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Reports</h1>
+      <h1>Reports</h1>
 
-      <form className="flex flex-wrap items-end gap-2">
-        <label className="text-sm">From<input type="date" name="from" defaultValue={range.from} className="mt-1 block h-11 rounded-md border bg-background px-2" /></label>
-        <label className="text-sm">To<input type="date" name="to" defaultValue={range.to} className="mt-1 block h-11 rounded-md border bg-background px-2" /></label>
-        <button className="h-11 rounded-md border bg-background px-4">Show</button>
-        <a href={`/api/reports/sales-register?${query}`} className={buttonVariants({ variant: "outline" })}>Download sales register (CSV)</a>
-        <a href={`/api/reports/hsn-summary?${query}`} className={buttonVariants({ variant: "outline" })}>Download HSN summary (CSV)</a>
+      <form className="flex flex-wrap items-end gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <label className="text-sm font-medium">From<input type="date" name="from" defaultValue={range.from} className="mt-1 block h-10 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" /></label>
+        <label className="text-sm font-medium">To<input type="date" name="to" defaultValue={range.to} className="mt-1 block h-10 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" /></label>
+        <button className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/50">Show</button>
+        <a href={`/api/reports/sales-register?${query}`} className={buttonVariants({ variant: "outline", size: "lg" })}>Download sales register (CSV)</a>
+        <a href={`/api/reports/hsn-summary?${query}`} className={buttonVariants({ variant: "outline", size: "lg" })}>Download HSN summary (CSV)</a>
       </form>
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -88,21 +88,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
 }
 
 function Tile({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-md border bg-background p-3"><p className="text-xs uppercase text-muted-foreground">{label}</p><p className="text-lg font-semibold">{value}</p></div>;
+  return <div className="rounded-xl bg-card p-3.5 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p><p className="mt-1 text-lg font-bold tabular-nums">{value}</p></div>;
 }
 
 function Table({ title, head, rows, link }: { title: string; head: string[]; rows: string[][]; link?: (row: number) => string }) {
   return (
     <div className="space-y-1">
       {title && <h3 className="text-sm font-medium">{title}</h3>}
-      <div className="overflow-x-auto rounded-md border bg-background">
+      <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         <table className="w-full text-sm">
-          <thead><tr className="border-b bg-muted/50 text-left">{head.map((h, i) => <th key={h} className={`px-3 py-2 font-medium ${i > 0 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
+          <thead><tr className="border-b bg-muted/60 text-left">{head.map((h, i) => <th key={h} className={`px-3 py-2.5 font-medium ${i > 0 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((row, r) => (
-              <tr key={r} className="border-b last:border-0">
+              <tr key={r} className="border-b border-border/70 last:border-0 transition-colors hover:bg-amber-500/[0.05]">
                 {row.map((cell, c) => (
-                  <td key={c} className={`px-3 py-2 ${c > 0 ? "text-right tabular-nums" : ""}`}>
+                  <td key={c} className={`px-3 py-2.5 ${c > 0 ? "text-right tabular-nums" : "font-medium"}`}>
                     {c === 0 && link ? <Link href={link(r)} className="underline">{cell}</Link> : cell}
                   </td>
                 ))}

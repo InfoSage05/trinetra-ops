@@ -11,7 +11,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const [customers, stock] = await Promise.all([searchCustomers(session, { limit: 500 }), getStockOverview(session, {})]);
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">New order</h1>
+      <h1>New order</h1>
       <OrderForm
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
         catalogue={stock.map((p) => ({ id: p.id, name: p.name, qtyPerCarton: p.qtyPerCarton }))}

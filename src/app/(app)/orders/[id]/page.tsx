@@ -29,12 +29,12 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       <Link href="/orders" className="text-sm underline">← All orders</Link>
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
-          <h1 className="text-xl font-semibold">{order.customer.name}</h1>
+          <h1>{order.customer.name}</h1>
           <p className="text-sm text-muted-foreground">Needed by {formatDateIN(order.dueDate)}{order.source !== "MANUAL" ? ` · entered by ${order.source === "VOICE" ? "voice" : order.source === "IMAGE" ? "photo" : "typing"} with the assistant` : ""}</p>
           {order.notes && <p className="text-sm">{order.notes}</p>}
         </div>
         {order.dueState === "OVERDUE" && <Badge variant="destructive">Overdue</Badge>}
-        {order.dueState === "DUE_SOON" && <Badge className="bg-amber-500">Due soon</Badge>}
+        {order.dueState === "DUE_SOON" && <Badge variant="warning">Due soon</Badge>}
         <OrderStatusBadge status={order.status} />
       </div>
 
@@ -46,7 +46,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      <ul className="divide-y rounded-md border bg-background">
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {order.lines.map((l) => (
           <li key={l.productId} className="space-y-1 p-3 text-sm">
             <p className="font-medium"><Link href={`/inventory/${l.productId}`} className="underline-offset-2 hover:underline">{l.productName}</Link></p>

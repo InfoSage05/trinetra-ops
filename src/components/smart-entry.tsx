@@ -72,7 +72,7 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
           {reviewing.extractor === "LLM" ? "Read by the AI assistant." : "Read by simple matching."} Nothing is saved until you press the button below.
           {reviewing.kind === "COUNT" && !canApproveCounts && " The owner will approve these counts."}
         </p>
-        {reviewing.notes.map((n) => <p key={n} className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">{n}</p>)}
+        {reviewing.notes.map((n) => <p key={n} className="rounded-lg bg-warning/15 p-2 text-sm text-warning-foreground">{n}</p>)}
         <LinesEditor lines={reviewing.lines} catalogue={catalogue} onChange={(lines) => setReviewing({ ...reviewing, lines })} />
         <Button variant="outline" onClick={() => setReviewing({ ...reviewing, lines: [...reviewing.lines, blankLine()] })}>+ Add an item</Button>
         <div className="grid grid-cols-2 gap-2">
@@ -86,7 +86,7 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
 
   return (
     <div className="space-y-4">
-      <section className="space-y-2 rounded-md border bg-background p-4">
+      <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         <h2 className="font-semibold">Tell me what was made</h2>
         <p className="text-sm text-muted-foreground">For example: “rose candle 5 carton, birthday 3 carton, masjid 120 pcs”. {aiAvailable ? "The AI assistant reads it." : "Simple matching reads it (no AI key set)."}</p>
         <Textarea aria-label="What was made" rows={4} value={text} onChange={(e) => { setText(e.target.value); setFromVoice(false); }} placeholder="rose candle 5 carton, birthday 3 carton" />
@@ -96,7 +96,7 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
         </div>
       </section>
 
-      <section className="space-y-2 rounded-md border bg-background p-4">
+      <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         <h2 className="font-semibold">Upload a stock sheet</h2>
         <p className="text-sm text-muted-foreground">Any Excel or CSV list of items and quantities. It becomes counts that the owner approves, so stock is never changed by mistake.</p>
         <input ref={fileInput} type="file" accept=".xlsx,.csv" aria-label="Stock sheet" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} className="block w-full text-sm" />

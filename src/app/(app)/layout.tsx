@@ -11,9 +11,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (session.mustChangePassword && pathname !== "/account/password") redirect("/account/password");
 
   return (
-    <div className="min-h-dvh bg-muted/30">
+    <div className="min-h-dvh bg-background">
       <AppNav name={session.name} role={session.role} />
-      <main className="mx-auto max-w-5xl p-4 pb-16">{children}</main>
+      <div aria-hidden className="h-px bg-gradient-to-r from-primary/70 via-primary/25 to-transparent" />
+      <main className="app-shell mx-auto w-full max-w-5xl px-4 pt-6 pb-16 sm:px-6 sm:pt-8">{children}</main>
       <HelpAssistant role={session.role} />
     </div>
   );

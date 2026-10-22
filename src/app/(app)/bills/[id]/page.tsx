@@ -19,7 +19,7 @@ export default async function BillPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-4">
       <BillActions view={view} />
-      <div className="overflow-x-auto rounded-md border bg-white">
+      <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-foreground/10 shadow-[0_2px_12px_rgb(64_38_16/0.06)]">
         <InvoiceSheet view={view} qrs={await invoiceQrCodes(view)} />
       </div>
     </div>

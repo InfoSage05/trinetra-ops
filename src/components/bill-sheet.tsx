@@ -90,7 +90,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
         }}
       />
       {matches.length > 0 && box && createPortal(
-        <ul role="listbox" className="fixed z-50 max-h-64 overflow-auto rounded-md border bg-background text-sm shadow-lg" style={{ left: box.left, top: box.top, width: box.width }}>
+        <ul role="listbox" className="fixed z-50 max-h-64 overflow-auto rounded-xl bg-card py-1 text-sm shadow-lg ring-1 ring-foreground/10" style={{ left: box.left, top: box.top, width: box.width }}>
           {matches.map((p, i) => (
             <li
               key={p.id} role="option" aria-selected={i === highlight}
@@ -146,7 +146,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
   const totalQty = sum((l) => l.quantity);
   const interState = preview?.interState ?? false;
 
-  const btn = "h-9 min-w-9 rounded-md border bg-background px-2 text-sm hover:bg-muted";
+  const btn = "h-9 min-w-9 rounded-lg border border-input bg-card px-2 text-sm transition-colors hover:bg-accent outline-none focus-visible:border-ring";
   return (
     <div
       // "Full width" lets the sheet use the whole screen even though the page is a narrower column. The extra 1.5rem
@@ -174,7 +174,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </div>
         <span className="text-xs text-muted-foreground">Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
       </div>
-    <div ref={frameRef} className="resize overflow-auto rounded-md border bg-background" style={{ minHeight: "12rem", maxHeight: "none" }} data-testid="bill-sheet">
+    <div ref={frameRef} className="resize overflow-auto rounded-xl bg-card ring-1 ring-foreground/10" style={{ minHeight: "12rem", maxHeight: "none" }} data-testid="bill-sheet">
       <div style={{ zoom: zoom / 100 }}>
       <table ref={tableRef} className="w-full border-collapse text-sm" style={{ minWidth: NATURAL_WIDTH }}>
         <colgroup>

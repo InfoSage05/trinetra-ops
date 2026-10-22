@@ -46,7 +46,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
   return (
     <div className="space-y-3">
       <Input placeholder="Search item" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
-      <ul className="divide-y rounded-md border bg-background">
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {visible.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-2 p-3">
             <div className="mr-auto">
@@ -55,7 +55,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
             </div>
             <span className="text-right text-sm font-semibold">{describeStock(r.stock, r.qtyPerCarton)}</span>
             {r.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}
-            {r.status === "LOW" && <Badge className="bg-amber-500">Low</Badge>}
+            {r.status === "LOW" && <Badge variant="warning">Low</Badge>}
             <Button size="sm" onClick={() => setMode({ kind: "produce", row: r })}>+ Made</Button>
             {canAdjust && <Button size="sm" variant="outline" onClick={() => setMode({ kind: "adjust", row: r })}>Correct</Button>}
           </li>

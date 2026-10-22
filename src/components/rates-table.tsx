@@ -61,7 +61,7 @@ function RateRow({ item }: { item: Item }) {
       </div>
       <span className="w-16 text-sm text-muted-foreground">GST {formatQuantity(item.gstRate)}%</span>
       {Number(item.unitPrice) === 0 && !changed.B && <Badge variant="destructive">Price not set</Badge>}
-      {changedName && <span className="text-sm text-amber-700">new name</span>}
+      {changedName && <span className="text-sm text-warning-foreground">new name</span>}
       <Button size="sm" className="h-11" disabled={!anyChange || busy} onClick={save}>Save</Button>
     </li>
   );
@@ -81,7 +81,7 @@ export function RatesTable({ items }: { items: Item[] }) {
         <Input placeholder="Search item" className="h-11 max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyUnset} onChange={(e) => setOnlyUnset(e.target.checked)} /> Only items with no rate yet ({unset})</label>
       </div>
-      <ul className="divide-y rounded-md border bg-background">
+      <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {visible.map((i) => <RateRow key={`${i.id}-${i.name}-${i.unitPrice}-${i.rateA}-${i.rateC}`} item={i} />)}
         {visible.length === 0 && <li className="p-6 text-center text-muted-foreground">No items.</li>}
       </ul>

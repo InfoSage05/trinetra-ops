@@ -65,11 +65,11 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">{view.invoiceNumber}</h1>
-        <Badge variant={view.payment.status === "PAID" ? "secondary" : "destructive"}>
+        <h1 className="mr-auto">{view.invoiceNumber}</h1>
+        <Badge variant={view.payment.status === "PAID" ? "success" : "destructive"}>
           {view.payment.status === "PAID" ? "Paid" : `Due ${formatINR(view.payment.amountDue)}`}
         </Badge>
-        {view.irp && <Badge variant={view.irp.status === "ACCEPTED" ? "secondary" : "outline"}>e-Invoice: {view.irp.status.toLowerCase()}</Badge>}
+        {view.irp && <Badge variant={view.irp.status === "ACCEPTED" ? "success" : "outline"}>e-Invoice: {view.irp.status.toLowerCase()}</Badge>}
       </div>
       <div className="flex flex-wrap gap-2">
         {due.greaterThan(0) && <Button onClick={() => { setAmount(view.payment.amountDue); setPayOpen(true); }}>Record payment</Button>}

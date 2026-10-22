@@ -28,11 +28,11 @@ export function CartonSize({ id, name, value, unit, editable }: { id: string; na
         aria-label={`Pieces in one carton of ${name}`} inputMode="numeric" value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && changed && !busy) void save(); }}
-        className={`h-8 w-16 rounded-md border bg-background px-2 text-center text-foreground ${value === 1 && !changed ? "border-amber-500" : ""}`}
+        className={`h-8 w-16 rounded-lg border bg-card px-2 text-center text-foreground ${value === 1 && !changed ? "border-warning" : ""}`}
       />
       {unit}
       {changed && <Button size="sm" className="h-8" disabled={busy} onClick={save}>Save</Button>}
-      {value === 1 && !changed && <span className="text-amber-600">not set yet</span>}
+      {value === 1 && !changed && <span className="text-warning-foreground">not set yet</span>}
     </span>
   );
 }

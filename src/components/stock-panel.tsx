@@ -29,12 +29,12 @@ export function StockBar({ product, availableNow, takingNow }: Omit<Props, "othe
   if (!product) return null;
   const { available, taking, left, short, low } = figures(product, availableNow, takingNow);
   return (
-    <div className={`rounded-lg border bg-background px-3 py-2 text-sm shadow-md ${short ? "border-destructive" : ""}`} data-testid="stock-bar">
+    <div className={`rounded-lg bg-card px-3 py-2 text-sm shadow-md ring-1 ring-foreground/10 ${short ? "border-destructive" : ""}`} data-testid="stock-bar">
       <p className="truncate font-medium">{product.name}</p>
       <p>
         In stock: <b>{describeStock(available.toString(), product.qtyPerCarton)}</b>
         {taking.greaterThan(0) && (
-          <> · After this bill: <b className={short ? "text-destructive" : low ? "text-amber-600" : ""}>{short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStock(left.toString(), product.qtyPerCarton)}</b></>
+          <> · After this bill: <b className={short ? "text-destructive" : low ? "text-warning-foreground" : ""}>{short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStock(left.toString(), product.qtyPerCarton)}</b></>
         )}
       </p>
     </div>
@@ -46,7 +46,7 @@ export function StockPanel({ product, availableNow, takingNow, others }: Props) 
   const { available, taking, left, reorder, short, low } = figures(product, availableNow, takingNow);
 
   return (
-    <div className="rounded-lg border bg-background p-4 shadow-md" data-testid="stock-panel">
+    <div className="rounded-xl bg-card p-4 shadow-md ring-1 ring-foreground/10" data-testid="stock-panel">
       <h2 className="text-base font-semibold">Stock check</h2>
       {product ? (
         <div className="mt-2 space-y-2">
@@ -72,7 +72,7 @@ export function StockPanel({ product, availableNow, takingNow, others }: Props) 
           )}
           <div className="flex flex-wrap gap-1">
             {short && <Badge variant="destructive">Not enough stock</Badge>}
-            {low && <Badge className="bg-amber-500">Running low (warn at {formatQuantity(reorder)})</Badge>}
+            {low && <Badge variant="warning">Running low (warn at {formatQuantity(reorder)})</Badge>}
             {!short && !low && taking.greaterThan(0) && <Badge variant="secondary">Enough stock</Badge>}
           </div>
         </div>

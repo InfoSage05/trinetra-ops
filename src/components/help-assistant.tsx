@@ -42,7 +42,7 @@ export function HelpAssistant({ role }: { role: Role }) {
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Help" className="fixed inset-x-2 bottom-2 top-16 z-50 flex flex-col rounded-xl border bg-background shadow-2xl sm:inset-x-auto sm:right-4 sm:top-auto sm:h-[34rem] sm:w-[24rem]" data-testid="help-panel">
+        <div role="dialog" aria-label="Help" className="fixed inset-x-2 bottom-2 top-16 z-50 flex flex-col rounded-xl bg-card shadow-2xl ring-1 ring-foreground/10 shadow-[0_16px_56px_-20px_rgb(64_38_16/0.35)] sm:inset-x-auto sm:right-4 sm:top-auto sm:h-[34rem] sm:w-[24rem]" data-testid="help-panel">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="font-semibold">Help</h2>
             <button type="button" onClick={() => setOpen(false)} className="rounded px-2 py-1 text-sm underline">Close</button>
@@ -66,7 +66,7 @@ export function HelpAssistant({ role }: { role: Role }) {
                   {m.links && m.links.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {m.links.map((l) => (
-                        <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-foreground underline-offset-2 hover:underline">Open {l.label}</Link>
+                        <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="rounded-lg bg-card px-3 py-1.5 text-sm font-medium ring-1 ring-foreground/10 underline-offset-2 transition-colors hover:bg-accent hover:text-accent-foreground">Open {l.label}</Link>
                       ))}
                     </div>
                   )}
@@ -80,7 +80,7 @@ export function HelpAssistant({ role }: { role: Role }) {
           <form className="flex gap-2 border-t p-3" onSubmit={(e) => { e.preventDefault(); void ask(question); }}>
             <input
               aria-label="Your question" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Type your question…"
-              className="h-12 min-w-0 flex-1 rounded-md border bg-background px-3" maxLength={500}
+              className="h-12 min-w-0 flex-1 rounded-lg border border-input bg-card px-3 outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" maxLength={500}
             />
             <Button type="submit" className="h-12" disabled={busy || question.trim().length < 2}>Ask</Button>
           </form>

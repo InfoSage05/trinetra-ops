@@ -45,7 +45,7 @@ export function linesReady(lines: EditableLine[], catalogue: CatalogueItem[], al
 export function LinesEditor({ lines, catalogue, onChange }: { lines: EditableLine[]; catalogue: CatalogueItem[]; onChange: (lines: EditableLine[]) => void }) {
   const patch = (key: number, change: Partial<EditableLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...change } : l)));
   return (
-    <ul className="divide-y rounded-md border bg-background" data-testid="proposal-lines">
+    <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]" data-testid="proposal-lines">
       {lines.map((line) => {
         const pieces = piecesOf(line, catalogue);
         const unsure = line.rawName && line.status !== "MATCHED" && !line.productId;
@@ -55,13 +55,13 @@ export function LinesEditor({ lines, catalogue, onChange }: { lines: EditableLin
             <div className="flex flex-wrap items-center gap-2">
               <select
                 aria-label="Item" value={line.productId} onChange={(e) => patch(line.key, { productId: e.target.value })}
-                className={`h-12 min-w-0 flex-1 rounded-md border bg-background px-2 ${unsure ? "border-destructive" : ""}`}
+                className={`h-12 min-w-0 flex-1 rounded-lg border border-input bg-card px-2.5 outline-none focus-visible:border-ring ${unsure ? "border-destructive" : ""}`}
               >
                 <option value="">Choose item…</option>
                 {catalogue.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <Input aria-label="Quantity" className="h-12 w-24" inputMode="decimal" value={line.quantity} onChange={(e) => patch(line.key, { quantity: e.target.value })} />
-              <select aria-label="Unit" value={line.unit} onChange={(e) => patch(line.key, { unit: e.target.value as "carton" | "piece" })} className="h-12 rounded-md border bg-background px-2">
+              <select aria-label="Unit" value={line.unit} onChange={(e) => patch(line.key, { unit: e.target.value as "carton" | "piece" })} className="h-12 rounded-lg border border-input bg-card px-2.5 outline-none focus-visible:border-ring">
                 <option value="carton">cartons</option>
                 <option value="piece">pieces</option>
               </select>

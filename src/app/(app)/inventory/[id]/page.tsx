@@ -23,24 +23,24 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       <Link href="/inventory" className="text-sm underline">← All stock</Link>
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
-          <h1 className="flex items-center gap-2 text-xl font-semibold">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
+          <h1 className="flex items-center gap-2">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
           <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · Rates: ${item.rateA ? `A ${formatINR(item.rateA.toString())} · ` : ""}B ${formatINR(item.unitPrice.toString())}${item.rateC ? ` · C ${formatINR(item.rateC.toString())}` : ""}` : ""}</p>
         </div>
         {isOwner && <Link href={`/billing/new?product=${item.id}`} className={buttonVariants({ size: "lg" })}>Bill this item</Link>}
       </div>
 
-      <div className="rounded-md border bg-background p-4">
-        <p className="text-xs uppercase text-muted-foreground">In stock now</p>
-        <p className="text-2xl font-semibold" data-testid="item-stock">{describeStock(item.stock.toString(), item.qtyPerCarton)}</p>
+      <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">In stock now</p>
+        <p className="mt-0.5 text-2xl font-bold tabular-nums" data-testid="item-stock">{describeStock(item.stock.toString(), item.qtyPerCarton)}</p>
         <div className="mt-2 flex gap-2">
           {item.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}
-          {item.status === "LOW" && <Badge className="bg-amber-500">Running low (warn at {formatQuantity(item.reorderLevel)})</Badge>}
+          {item.status === "LOW" && <Badge variant="warning">Running low (warn at {formatQuantity(item.reorderLevel)})</Badge>}
         </div>
       </div>
 
       <section>
         <h2 className="mb-2 font-semibold">Stock movements</h2>
-        <ul className="divide-y rounded-md border bg-background">
+        <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
           {item.movements.map((m) => (
             <li key={m.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
               <div className="mr-auto">
@@ -57,7 +57,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       {isOwner && item.rateChanges.length > 0 && (
         <section data-testid="rate-history">
           <h2 className="mb-2 font-semibold">Rate history</h2>
-          <ul className="divide-y rounded-md border bg-background">
+          <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
             {item.rateChanges.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
                 <span className="mr-auto">Rate {c.tier}: {c.oldRate ? formatINR(c.oldRate.toString()) : "not set"} → {c.newRate ? formatINR(c.newRate.toString()) : "same as B"}{c.reason ? ` · ${c.reason}` : ""}</span>
@@ -71,7 +71,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       {isOwner && item.recentSales.length > 0 && (
         <section>
           <h2 className="mb-2 font-semibold">Recent sales</h2>
-          <ul className="divide-y rounded-md border bg-background">
+          <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
             {item.recentSales.map((s) => (
               <li key={s.billId}>
                 <Link href={`/bills/${s.billId}`} className="flex flex-wrap gap-2 p-3 text-sm hover:bg-muted/50">
