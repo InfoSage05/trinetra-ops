@@ -31,9 +31,9 @@ export function OwnerDashboard({ data }: { data: Data }) {
       </Link>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat icon={<Chip className="bg-primary/10 text-primary" icon={<IndianRupee className="size-5" />} />} label="Today's sales" value={formatINR(data.today.salesTotal)} />
-        <Stat icon={<Chip className="bg-info/10 text-info" icon={<ReceiptText className="size-5" />} />} label="Bills today" value={String(data.today.billCount)} />
-        <Stat icon={<Chip className={cn("bg-warning/25 text-warning-foreground", D(data.totalDue).isZero() && "bg-muted text-muted-foreground")} icon={<HandCoins className="size-5" />} />} label="Money to collect" value={formatINR(data.totalDue)} href="/bills?status=DUE" tone={D(data.totalDue).isZero() ? undefined : "warn"} />
+        <Stat color="from-amber-100 to-orange-50 dark:from-amber-950/40" icon={<Chip className="bg-amber-500 text-white shadow-sm" icon={<IndianRupee className="size-5" />} />} label="Today's sales" value={formatINR(data.today.salesTotal)} />
+        <Stat color="from-sky-100 to-blue-50 dark:from-sky-950/40" icon={<Chip className="bg-sky-500 text-white shadow-sm" icon={<ReceiptText className="size-5" />} />} label="Bills today" value={String(data.today.billCount)} />
+        <Stat color={D(data.totalDue).isZero() ? "from-emerald-100 to-green-50 dark:from-emerald-950/40" : "from-rose-100 to-orange-50 dark:from-rose-950/40"} icon={<Chip className={cn("bg-rose-500 text-white shadow-sm", D(data.totalDue).isZero() && "bg-emerald-500")} icon={<HandCoins className="size-5" />} />} label="Money to collect" value={formatINR(data.totalDue)} href="/bills?status=DUE" tone={D(data.totalDue).isZero() ? undefined : "warn"} />
       </div>
 
       {attention > 0 && (
@@ -97,15 +97,15 @@ export function OwnerDashboard({ data }: { data: Data }) {
 
 function Chip({ className, icon }: { className: string; icon: React.ReactNode }) {
   return (
-    <span className={cn("grid size-9 shrink-0 place-items-center rounded-lg", className)}>
+    <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", className)}>
       {icon}
     </span>
   );
 }
 
-function Stat({ label, value, href, icon, tone }: { label: string; value: string; href?: string; icon: React.ReactNode; tone?: "warn" }) {
+function Stat({ label, value, href, icon, tone, color }: { label: string; value: string; href?: string; icon: React.ReactNode; tone?: "warn"; color?: string }) {
   const body = (
-    <Card className={cn("transition-colors hover:bg-accent/40", tone === "warn" && "bg-warning/[0.07]")}>
+    <Card className={cn("bg-gradient-to-br transition-all hover:-translate-y-0.5 hover:shadow-lg", color ?? "from-card to-card", tone === "warn" && "ring-rose-300")}>
       <CardContent className="flex items-center justify-between gap-2 pt-6">
         <div className="min-w-0">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>

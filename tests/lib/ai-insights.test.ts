@@ -74,7 +74,7 @@ describe("buildInsightsDigest", () => {
   });
 
   it("marks the oldest unpaid bucket of each due customer", () => {
-    const digest = buildInsightsDigest(fakeSales(), fakeAgeing({ "90+": D(250) }), fakeMovement([]));
+    const digest = buildInsightsDigest(fakeSales(), fakeAgeing({ "90+": 250 }), fakeMovement([]));
     expect(digest).toContain("90+ days");
     expect(digest).toMatch(/oldest 90\+ days/);
   });

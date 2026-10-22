@@ -1,26 +1,48 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FlameKindling, KeyRound, LogOut } from "lucide-react";
+import { BarChart3, Boxes, ClipboardCheck, ClipboardList, FileText, FlameKindling, House, KeyRound, LogOut, Package, ReceiptText, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import type { Role } from "@/lib/auth";
 
-const OWNER_LINKS = [
-  ["/dashboard", "Home"], ["/billing/new", "New bill"], ["/bills", "Bills"], ["/inventory", "Stock"], ["/orders", "Orders"], ["/assistant", "Smart entry"],
-  ["/customers", "Customers"], ["/products", "Products"], ["/reports", "Reports"], ["/settings", "Settings"],
-] as const;
-const WORKER_LINKS = [["/dashboard", "Home"], ["/inventory", "Stock"], ["/assistant", "Smart entry"], ["/inventory/counts", "Count stock"]] as const;
+type Tab = { href: string; label: string; icon: LucideIcon; active: string; tint: string };
+
+// Every tab has its own colour: a solid pill when it is the open page, a tinted icon otherwise.
+const TAB = {
+  home: { icon: House, active: "bg-amber-500 text-amber-950", tint: "text-amber-300" },
+  bill: { icon: ReceiptText, active: "bg-rose-500 text-white", tint: "text-rose-300" },
+  bills: { icon: FileText, active: "bg-sky-500 text-white", tint: "text-sky-300" },
+  stock: { icon: Boxes, active: "bg-emerald-500 text-emerald-950", tint: "text-emerald-300" },
+  orders: { icon: ClipboardList, active: "bg-violet-500 text-white", tint: "text-violet-300" },
+  smart: { icon: Sparkles, active: "bg-fuchsia-500 text-white", tint: "text-fuchsia-300" },
+  customers: { icon: Users, active: "bg-teal-500 text-teal-950", tint: "text-teal-300" },
+  products: { icon: Package, active: "bg-orange-500 text-orange-950", tint: "text-orange-300" },
+  reports: { icon: BarChart3, active: "bg-indigo-500 text-white", tint: "text-indigo-300" },
+  settings: { icon: Settings, active: "bg-slate-400 text-slate-950", tint: "text-slate-300" },
+  count: { icon: ClipboardCheck, active: "bg-cyan-500 text-cyan-950", tint: "text-cyan-300" },
+} as const;
+
+const OWNER_LINKS: Tab[] = [
+  { href: "/dashboard", label: "Home", ...TAB.home }, { href: "/billing/new", label: "New bill", ...TAB.bill }, { href: "/bills", label: "Bills", ...TAB.bills },
+  { href: "/inventory", label: "Stock", ...TAB.stock }, { href: "/orders", label: "Orders", ...TAB.orders }, { href: "/assistant", label: "Smart entry", ...TAB.smart },
+  { href: "/customers", label: "Customers", ...TAB.customers }, { href: "/products", label: "Products", ...TAB.products }, { href: "/reports", label: "Reports", ...TAB.reports },
+  { href: "/settings", label: "Settings", ...TAB.settings },
+];
+const WORKER_LINKS: Tab[] = [
+  { href: "/dashboard", label: "Home", ...TAB.home }, { href: "/inventory", label: "Stock", ...TAB.stock }, { href: "/assistant", label: "Smart entry", ...TAB.smart },
+  { href: "/inventory/counts", label: "Count stock", ...TAB.count },
+];
 
 export function AppNav({ name, role }: { name: string; role: Role }) {
   const pathname = usePathname();
   const links = role === "OWNER" ? OWNER_LINKS : WORKER_LINKS;
   // The longest matching link wins, so /inventory/counts lights up Count stock, not Stock.
   const bestMatch = links
-    .filter(([href]) => pathname === href || pathname.startsWith(`${href}/`))
-    .sort((a, b) => b[0].length - a[0].length)[0]?.[0];
+    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
-    <header className="sticky top-0 z-20 bg-sidebar text-sidebar-foreground shadow-[0_1px_0_var(--sidebar-border)_inset,0_8px_24px_-16px_rgb(31_16_6_/_0.6)]">
-      <div className="mx-auto flex max-w-5xl items-center pl-3 sm:pl-4">
+    <header className="sticky top-0 z-20 bg-gradient-to-r from-sidebar via-[oklch(0.27_0.055_28)] to-[oklch(0.3_0.075_18)] text-sidebar-foreground shadow-[0_1px_0_var(--sidebar-border)_inset,0_8px_24px_-16px_rgb(31_16_6_/_0.6)]">
+      <div className="mx-auto flex max-w-[92rem] items-center pl-3 sm:pl-4">
         <Link href="/dashboard" className="mr-2.5 flex shrink-0 items-center gap-2.5 self-stretch rounded-md outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70 md:mr-0">
           <span className="grid size-8 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-[0_2px_6px_rgb(245_158_11_/_0.35)]">
             <FlameKindling className="size-4.5" />
@@ -31,8 +53,8 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
           </span>
         </Link>
         <span aria-hidden className="mx-2.5 hidden h-5 w-px shrink-0 bg-sidebar-foreground/25 md:block" />
-        <nav aria-label="Main" className="flex flex-1 items-center overflow-x-auto py-2.5">
-          {links.map(([href, label]) => {
+        <nav aria-label="Main" className="flex flex-1 items-center gap-2 overflow-x-auto py-3 sm:gap-2.5 md:flex-wrap md:overflow-visible">
+          {links.map(({ href, label, icon: Icon, active: activeClass, tint }) => {
             const active = bestMatch === href;
             return (
               <Link
@@ -40,18 +62,19 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70",
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70",
                   active
-                    ? "bg-sidebar-foreground/95 text-sidebar shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    ? `${activeClass} font-semibold shadow-md`
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 )}
               >
+                <Icon className={cn("size-4", !active && tint)} aria-hidden />
                 {label}
               </Link>
             );
           })}
         </nav>
-        <div className="ml-1 hidden max-w-44 shrink truncate text-sm text-sidebar-foreground/60 md:block lg:ml-2" title={name}>
+        <div className="ml-1 hidden max-w-44 shrink truncate text-sm text-sidebar-foreground/60 xl:block 2xl:ml-2" title={name}>
           {name}
         </div>
         <div className="flex shrink-0 items-center pr-2 sm:pr-3">
