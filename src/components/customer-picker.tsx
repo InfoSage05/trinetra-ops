@@ -47,7 +47,7 @@ export function CustomerPicker({ value, onSelect, defaultStateCode }: { value: S
       {adding && (
         <CustomerDialog
           open
-          initial={{ name: query, phone: "", gstin: "", billingAddress: "", stateCode: defaultStateCode }}
+          initial={{ name: query, phone: "", gstin: "", billingAddress: "", stateCode: defaultStateCode, rateTier: "B" }}
           onClose={() => setAdding(false)}
           onSaved={(c) => { setAdding(false); onSelect(c); }}
         />

@@ -16,7 +16,8 @@ import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
 import { GstSummary } from "@/components/gst-summary";
-import { CHARGE_FIELDS, blankLine, linePieces, type Charges, type Line } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, blankLine, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { RATE_TIERS, RATE_TIER_LABELS, rateFor, type RateTier } from "@/lib/rates";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
@@ -25,7 +26,6 @@ import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { useBillLayout } from "@/lib/client/use-bill-layout";
 import { useSheetPrefs } from "@/lib/client/use-sheet-prefs";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
-import { splitCartons } from "@/lib/cartons";
 import { D, amountInWords, formatINR, formatQuantity } from "@/lib/money";
 
 type PayMode = "FULL" | "PART" | "CREDIT";
@@ -45,14 +45,15 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   const [key, renewKey] = useIdempotencyKey();
   const [customer, setCustomer] = useState<SavedCustomer | null>(initialCustomer);
   const [placeOfSupply, setPlaceOfSupply] = useState(initialCustomer?.stateCode ?? businessStateCode);
+  // Which of the three rates this bill uses; it starts from the customer's own rate type and can be changed.
+  const [rateTier, setRateTier] = useState<RateTier>(initialCustomer?.rateTier ?? "B");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>(() => {
     const fromOrder = (order?.lines ?? []).flatMap((l) => {
       const product = products.find((p) => p.id === l.productId);
       if (!product) return [];
-      const { cartons, pieces } = splitCartons(l.pieces, product.qtyPerCarton);
-      return [{ ...blankLine(product.id), cartons: String(cartons), loosePieces: pieces ? String(pieces) : "" }];
+      return [{ ...blankLine(product.id), ...fromPieces(l.pieces, product.qtyPerCarton) }];
     });
     return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
   });
@@ -76,12 +77,12 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   const draft = {
     customerId: customer?.id ?? "",
     placeOfSupply,
+    rateTier,
     ...(deliveryAddress.trim() ? { deliveryAddress: deliveryAddress.trim() } : {}),
     ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: filledLines.map((l) => ({
       productId: l.productId,
-      cartons: l.cartons.trim() || "0",
-      ...(l.loosePieces.trim() ? { loosePieces: l.loosePieces.trim() } : {}),
+      quantity: pieceCount(l), // whatever unit it was typed in (cartons, dozens, pieces), the bill is worked out in pieces
       ...(l.unitPrice ? { unitPrice: l.unitPrice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
@@ -172,7 +173,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
         <div className="space-y-4">
           <Card><CardContent className="space-y-3 pt-6">
             <Label>Name of the purchaser</Label>
-            <CustomerPicker value={customer} defaultStateCode={businessStateCode} onSelect={(c) => { setCustomer(c); setPlaceOfSupply(c.stateCode); }} />
+            <CustomerPicker value={customer} defaultStateCode={businessStateCode} onSelect={(c) => { setCustomer(c); setPlaceOfSupply(c.stateCode); setRateTier(c.rateTier); }} />
             {customer && (
               <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2" data-testid="purchaser-details">
                 <div><dt className="inline text-muted-foreground">Mobile no: </dt><dd className="inline">{customer.phone ?? "-"}</dd></div>
@@ -180,6 +181,17 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                 <div className="sm:col-span-2"><dt className="inline text-muted-foreground">Address: </dt><dd className="inline">{customer.billingAddress}</dd></div>
               </dl>
             )}
+            <div className="space-y-1.5" data-testid="rate-tier">
+              <Label>Rate for this bill</Label>
+              <div role="group" aria-label="Rate for this bill" className="grid grid-cols-3 gap-2">
+                {RATE_TIERS.map((t) => (
+                  <Button key={t} type="button" variant={rateTier === t ? "default" : "outline"} className="h-12" aria-pressed={rateTier === t} onClick={() => setRateTier(t)}>
+                    {RATE_TIER_LABELS[t]}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Starts from the customer&apos;s own rate. Items use this rate unless you type a different one on the line.</p>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="pos">Goods delivered to (place of supply)</Label>
               <StateSelect id="pos" value={placeOfSupply} onChange={setPlaceOfSupply} />
@@ -194,7 +206,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             <BillSheet
               products={products} lines={lines} filledLines={filledLines} preview={preview}
               charges={charges} onCharges={setCharges} onEdit={editAt} onClear={clearAt} onActivate={setActiveIndex}
-              prefs={sheetPrefs} onPrefs={setSheetPrefs}
+              rateTier={rateTier} prefs={sheetPrefs} onPrefs={setSheetPrefs}
             />
           ) : (
             <>
@@ -214,13 +226,18 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                   {product && (
                     <>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="space-y-1"><Label>No of cartons</Label><Input aria-label="Cartons" className="h-12 text-lg" inputMode="decimal" value={line.cartons} onChange={(e) => update(line.rowId, { cartons: e.target.value })} /></div>
-                        <div className="space-y-1"><Label>Extra pieces</Label><Input aria-label="Extra pieces" className="h-12 text-lg" inputMode="decimal" placeholder="0" value={line.loosePieces} onChange={(e) => update(line.rowId, { loosePieces: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Quantity</Label><Input aria-label="Quantity" className="h-12 text-lg" inputMode="decimal" value={line.qty} onChange={(e) => update(line.rowId, { qty: e.target.value })} /></div>
+                        <div className="space-y-1">
+                          <Label>Unit</Label>
+                          <select aria-label="Unit" className="h-12 w-full rounded-md border bg-background px-2 text-lg" value={line.unit} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); update(line.rowId, { unit: e.target.value as QtyUnit }); }}>
+                            {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                          </select>
+                        </div>
                         <div className="space-y-1"><Label>Qty per carton</Label><p className="flex h-12 items-center rounded-md bg-muted px-3" data-testid="qty-per-carton">{product.qtyPerCarton}</p></div>
                         <div className="space-y-1"><Label>Total qty</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="total-qty">{formatQuantity(pieces)} {product.unit}</p></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="space-y-1"><Label>Rate</Label><Input aria-label="Rate" className="h-12" inputMode="decimal" placeholder={product.unitPrice} value={line.unitPrice} onChange={(e) => update(line.rowId, { unitPrice: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Rate</Label><Input aria-label="Rate" className="h-12" inputMode="decimal" placeholder={formatQuantity(rateFor(product, rateTier))} value={line.unitPrice} onChange={(e) => update(line.rowId, { unitPrice: e.target.value })} /></div>
                         <div className="space-y-1"><Label>Discount ₹</Label><Input aria-label="Discount" className="h-12" inputMode="decimal" placeholder="0" value={line.discountAmount} onChange={(e) => update(line.rowId, { discountAmount: e.target.value })} /></div>
                         <div className="space-y-1"><Label>GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3">{formatQuantity(product.gstRate)}%</p></div>
                         <div className="space-y-1"><Label>Total amount</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{pl ? formatINR(pl.lineTotal) : "-"}</p></div>

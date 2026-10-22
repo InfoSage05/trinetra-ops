@@ -23,8 +23,8 @@ test("owner bills 1 carton + 3 pieces with freight; stock panel shows the item; 
   // The stock panel appears beside the form as soon as an item is chosen.
   await expect(page.getByTestId("stock-bar")).toContainText("2 cartons (20 pcs)");
   await expect(page.getByTestId("qty-per-carton")).toHaveText("10");
-  await page.getByLabel("Cartons", { exact: true }).fill("1");
-  await page.getByLabel("Extra pieces").fill("3");
+  await page.getByLabel("Unit", { exact: true }).selectOption("piece"); // 13 loose pieces
+  await page.getByLabel("Quantity", { exact: true }).fill("13");
   await expect(page.getByTestId("total-qty")).toContainText("13");
   await expect(page.getByTestId("stock-bar")).toContainText("After this bill: 7 pcs");
   await page.getByLabel("Freight charges").fill("100");

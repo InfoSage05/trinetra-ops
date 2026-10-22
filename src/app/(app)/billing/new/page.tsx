@@ -39,7 +39,7 @@ export default async function NewBillPage({ searchParams }: { searchParams: Sear
       businessStateCode={profile.stateCode}
       initialCustomer={initialCustomer ? {
         id: initialCustomer.id, name: initialCustomer.name, phone: initialCustomer.phone, gstin: initialCustomer.gstin,
-        billingAddress: initialCustomer.billingAddress, stateCode: initialCustomer.stateCode,
+        billingAddress: initialCustomer.billingAddress, stateCode: initialCustomer.stateCode, rateTier: initialCustomer.rateTier,
       } : null}
       initialProductId={initialProductId}
       order={openOrder ? {

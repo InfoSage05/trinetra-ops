@@ -28,12 +28,23 @@ test("owner makes a bill in the Excel-sheet layout using only the keyboard, and 
   await rows.nth(0).getByLabel("Item").fill("sheet cand");
   await expect(page.getByRole("option", { name: /E2E Sheet Candle/ })).toBeVisible();
   await page.keyboard.press("Enter");
-  await expect(rows.nth(0).getByLabel("Cartons")).toBeFocused();
-  await page.keyboard.type("2");
-  await page.keyboard.press("Tab");
-  await page.keyboard.type("1"); // + 1 loose piece
+  await expect(rows.nth(0).getByLabel("Quantity")).toBeFocused();
+  await page.keyboard.type("2"); // the unit starts as cartons: 2 cartons x 6 = 12 pieces
   await expect(rows.nth(0).getByTestId("sheet-qty-per-carton")).toHaveText("6");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toHaveText("13");
+  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("12");
+  await expect(rows.nth(0).getByTestId("sheet-cartons")).toHaveText("2");
+
+  // The same 2 can be dozens or pieces: different dealers count in different ways.
+  await page.keyboard.press("Tab");
+  await expect(rows.nth(0).getByLabel("Unit")).toBeFocused();
+  await rows.nth(0).getByLabel("Unit").selectOption("dozen");
+  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("24"); // 2 dozens
+  await expect(rows.nth(0).getByTestId("sheet-cartons")).toHaveText("4");
+  await rows.nth(0).getByLabel("Unit").selectOption("piece");
+  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("2");
+  await rows.nth(0).getByLabel("Unit").selectOption("carton");
+  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("12");
+  await rows.nth(0).getByLabel("Quantity").click();
 
   // Enter goes down to the next row's item cell, like a spreadsheet.
   await page.keyboard.press("Enter");

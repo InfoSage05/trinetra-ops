@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
-import { CHARGE_FIELDS, linePieces, type Charges, type Line } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { rateFor, type RateTier } from "@/lib/rates";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { D, amountInWords, formatAmount, formatQuantity } from "@/lib/money";
@@ -25,12 +26,13 @@ type Props = {
   onEdit: (index: number, patch: Partial<Line>) => void;
   onClear: (index: number) => void;
   onActivate: (index: number) => void;
+  rateTier: RateTier;
   prefs: SheetPrefs;
   onPrefs: (change: Partial<SheetPrefs>) => void;
 };
 
 const NATURAL_WIDTH = 980; // the table is laid out this wide before zooming
-const COL = { item: 0, cartons: 1, pieces: 2, rate: 3, discount: 4 } as const;
+const COL = { item: 0, quantity: 1, unit: 2, rate: 3, discount: 4 } as const;
 const th = "border border-neutral-400 bg-neutral-100 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight";
 const td = "border border-neutral-300 px-1 py-0 align-middle";
 const num = `${td} text-right tabular-nums`;
@@ -106,7 +108,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
   );
 }
 
-export function BillSheet({ products, lines, filledLines, preview, charges, onCharges, onEdit, onClear, onActivate, prefs, onPrefs }: Props) {
+export function BillSheet({ products, lines, filledLines, preview, charges, onCharges, onEdit, onClear, onActivate, rateTier, prefs, onPrefs }: Props) {
   const tableRef = useRef<HTMLTableElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [fitZoom, setFitZoom] = useState(100);
@@ -180,7 +182,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "+ Pcs", "Qty per carton", "Total qty", "Unit", "Rate", "Discount ₹", "GST %", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Qty per carton", "Quantity", "Unit", "Total qty", "Rate", "Discount ₹", "GST %", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -198,23 +200,26 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                   <ItemCell
                     product={product} products={products} dataCell={cell("item")}
                     onPick={(p) => onEdit(i, { productId: p?.id ?? "", unitPrice: "" })}
-                    onNext={() => focusCell(i, COL.cartons)} onFocusRow={() => onActivate(i)} onArrow={(d) => focusCell(i + d, COL.item)}
+                    onNext={() => focusCell(i, COL.quantity)} onFocusRow={() => onActivate(i)} onArrow={(d) => focusCell(i + d, COL.item)}
                   />
                 </td>
                 <td className={`${td} text-center`}>{pl?.hsnCode ?? ""}</td>
-                <td className={td}>
-                  <input data-cell={cell("cartons")} aria-label="Cartons" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
-                    value={line?.cartons ?? ""} onChange={(e) => onEdit(i, { cartons: e.target.value })} onKeyDown={keys(i, COL.cartons)} onFocus={(e) => e.currentTarget.select()} />
-                </td>
-                <td className={td}>
-                  <input data-cell={cell("pieces")} aria-label="Extra pieces" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
-                    value={line?.loosePieces ?? ""} onChange={(e) => onEdit(i, { loosePieces: e.target.value })} onKeyDown={keys(i, COL.pieces)} onFocus={(e) => e.currentTarget.select()} />
-                </td>
+                <td className={num} data-testid="sheet-cartons">{product && D(pieces).greaterThan(0) ? formatQuantity(D(pieces).div(product.qtyPerCarton).toDecimalPlaces(2)) : ""}</td>
                 <td className={`${num} text-muted-foreground`} data-testid="sheet-qty-per-carton">{product?.qtyPerCarton ?? ""}</td>
-                <td className={`${num} font-medium`} data-testid="sheet-total-qty">{product && D(pieces).greaterThan(0) ? formatQuantity(pieces) : ""}</td>
-                <td className={`${td} text-center`}>{product?.unit ?? ""}</td>
                 <td className={td}>
-                  <input data-cell={cell("rate")} aria-label="Rate" inputMode="decimal" disabled={!product} placeholder={product ? formatQuantity(product.unitPrice) : ""} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed"
+                  <input data-cell={cell("quantity")} aria-label="Quantity" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
+                    value={line?.qty ?? ""} onChange={(e) => onEdit(i, { qty: e.target.value })} onKeyDown={keys(i, COL.quantity)} onFocus={(e) => e.currentTarget.select()} />
+                </td>
+                <td className={td}>
+                  <select data-cell={cell("unit")} aria-label="Unit" disabled={!product} className="w-full bg-transparent px-0.5 py-1.5 outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
+                    value={line?.unit ?? "carton"} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); onEdit(i, { unit: e.target.value as QtyUnit }); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusCell(i + 1, COL.item); } }}>
+                    {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                  </select>
+                </td>
+                <td className={`${num} font-medium`} data-testid="sheet-total-qty">{product && D(pieces).greaterThan(0) ? `${formatQuantity(pieces)} ${product.unit}` : ""}</td>
+                <td className={td}>
+                  <input data-cell={cell("rate")} aria-label="Rate" inputMode="decimal" disabled={!product} placeholder={product ? formatQuantity(rateFor(product, rateTier)) : ""} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed"
                     value={line?.unitPrice ?? ""} onChange={(e) => onEdit(i, { unitPrice: e.target.value })} onKeyDown={keys(i, COL.rate)} onFocus={(e) => e.currentTarget.select()} />
                 </td>
                 <td className={td}>
@@ -227,7 +232,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                 <td className={num}>{pl && interState ? formatAmount(pl.igstAmount) : ""}</td>
                 <td className={`${num} font-semibold`} data-testid="sheet-line-total">{pl ? formatAmount(pl.lineTotal) : ""}</td>
                 <td className={`${td} text-center`}>
-                  {line && (line.productId || line.cartons) && (
+                  {line && (line.productId || line.qty) && (
                     <button type="button" aria-label={`Clear row ${i + 1}`} tabIndex={-1} className="text-neutral-400 hover:text-destructive" onClick={() => onClear(i)}>×</button>
                   )}
                 </td>
@@ -238,10 +243,9 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           <tr className="bg-neutral-50 font-bold">
             <td colSpan={3} className={`${td} px-2 py-1.5 text-right`}>TOTAL</td>
             <td className={num}>{preview ? formatQuantity(totalCartons.toDecimalPlaces(2)) : ""}</td>
-            <td className={td} />
-            <td className={td} />
+            <td colSpan={3} className={td} />
             <td className={num}>{preview ? formatQuantity(totalQty) : ""}</td>
-            <td colSpan={4} className={td} />
+            <td colSpan={3} className={td} />
             <td className={num}>{preview && !interState ? formatAmount(sum((l) => l.cgstAmount)) : ""}</td>
             <td className={num}>{preview && !interState ? formatAmount(sum((l) => l.sgstAmount)) : ""}</td>
             <td className={num}>{preview && interState ? formatAmount(sum((l) => l.igstAmount)) : ""}</td>

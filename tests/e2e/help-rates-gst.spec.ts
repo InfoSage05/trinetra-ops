@@ -36,14 +36,18 @@ test("owner changes an item's rate and name from the Rates and names table", asy
   await page.goto("/products");
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Rates and names" }).click();
-  await page.getByLabel("Rate of E2E Rate Me", { exact: true }).fill("175.50");
+  await page.getByLabel("Rate B of E2E Rate Me", { exact: true }).fill("175.50");
+  await page.getByLabel("Rate A of E2E Rate Me", { exact: true }).fill("150");
+  await page.getByLabel("Rate C of E2E Rate Me", { exact: true }).fill("210");
   await page.getByLabel("Name of E2E Rate Me", { exact: true }).fill("E2E Rate Me Big");
-  await page.locator("li", { has: page.getByLabel("Rate of E2E Rate Me", { exact: true }) }).getByRole("button", { name: "Save" }).click();
+  await page.locator("li", { has: page.getByLabel("Rate B of E2E Rate Me", { exact: true }) }).getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
 
   await page.reload();
   await page.getByRole("button", { name: "Rates and names" }).click();
-  await expect(page.getByLabel("Rate of E2E Rate Me Big")).toHaveValue("175.50");
+  await expect(page.getByLabel("Rate B of E2E Rate Me Big")).toHaveValue("175.50");
+  await expect(page.getByLabel("Rate A of E2E Rate Me Big")).toHaveValue("150.00");
+  await expect(page.getByLabel("Rate C of E2E Rate Me Big")).toHaveValue("210.00");
 });
 
 test("GST rates are visible while making a bill, in both layouts", async ({ browser }) => {
@@ -58,7 +62,7 @@ test("GST rates are visible while making a bill, in both layouts", async ({ brow
   await page.getByRole("button", { name: "Choose item…" }).click();
   await page.getByRole("option", { name: /E2E Mint Candle/ }).click();
   await expect(page.getByText("GST 18%").first()).toBeVisible(); // beside the item in the card
-  await page.getByLabel("Cartons", { exact: true }).fill("1");
+  await page.getByLabel("Quantity", { exact: true }).fill("1");
   await expect(page.getByTestId("gst-rate-row").first()).toContainText("18%");
 
   await page.getByRole("button", { name: "Excel sheet" }).click();
@@ -84,4 +88,45 @@ test("owner can set the same GST rate on every item from Products", async ({ pag
   await page.getByRole("button", { name: "Change GST for all items" }).click();
   await expect(page.getByText(/GST set to 5.00% on \d+ item|already has 5.00% GST/)).toBeVisible();
   await expect(page.getByText("GST 18%")).toHaveCount(0);
+});
+
+test("the bill starts at the customer's rate type, and it can be switched between Rate A, B and C", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Cards" }).click();
+  await page.getByRole("button", { name: "Choose customer…" }).click();
+  await page.getByPlaceholder("Name, mobile or GSTIN…").fill("Tier");
+  await page.getByRole("option", { name: /Tier Traders/ }).click();
+  const group = page.getByTestId("rate-tier");
+  await expect(group.getByRole("button", { name: /Rate C/ })).toHaveAttribute("aria-pressed", "true"); // this customer is a direct vendor
+
+  await page.getByRole("button", { name: "Choose item…" }).click();
+  await page.getByRole("option", { name: /E2E Tier Candle/ }).click();
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "130");
+  await group.getByRole("button", { name: /Rate A/ }).click();
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "80");
+  await group.getByRole("button", { name: /Rate B/ }).click();
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "100");
+
+  // The server's total uses the chosen rate: 10 pieces at Rate A = 800 before GST.
+  await group.getByRole("button", { name: /Rate A/ }).click();
+  await page.getByLabel("Unit", { exact: true }).selectOption("piece");
+  await page.getByLabel("Quantity", { exact: true }).fill("10");
+  await expect(page.getByTestId("gst-rate-row").first()).toContainText("800");
+});
+
+test("owner raises every rate by a percentage when the wax price goes up", async ({ page }) => {
+  await login(page, E2E_OWNER);
+  await page.goto("/products");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Change all rates by %" }).click();
+  await page.getByLabel("Percent change").fill("10");
+  await page.getByRole("button", { name: "Change the rates" }).click();
+  await expect(page.getByText(/Rates changed by 10% on \d+ item/)).toBeVisible();
+  await page.getByRole("button", { name: "Rates and names" }).click();
+  await expect(page.getByLabel("Rate B of E2E Tier Candle")).toHaveValue("110.00");
+  await expect(page.getByLabel("Rate A of E2E Tier Candle")).toHaveValue("88.00");
+  await expect(page.getByLabel("Rate C of E2E Tier Candle")).toHaveValue("143.00");
 });

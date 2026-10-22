@@ -8,7 +8,7 @@ import { formatINR } from "@/lib/money";
 
 export type BillableProduct = {
   id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; reorderLevel: string;
-  unitPrice: string; gstRate: string; stock: string;
+  unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; stock: string;
 };
 
 export function ProductPicker({ products, value, onSelect }: { products: BillableProduct[]; value: string; onSelect: (p: BillableProduct) => void }) {

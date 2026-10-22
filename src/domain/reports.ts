@@ -144,12 +144,13 @@ export async function getProductDetail(session: Session | null, id: string) {
   requireRole(session, ["OWNER", "WORKER"]);
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product) throw new NotFoundError("Item");
-  const [stock, movements, soldAgg] = await Promise.all([
+  const [stock, movements, soldAgg, rateChanges] = await Promise.all([
     getCurrentStock(prisma, id),
     prisma.stockLedgerEntry.findMany({ where: { productId: id }, orderBy: { createdAt: "desc" }, take: 50 }),
     session?.role === "OWNER"
       ? prisma.billLineItem.findMany({ where: { productId: id }, orderBy: { bill: { billDate: "desc" } }, take: 10, select: { quantity: true, bill: { select: { id: true, invoiceNumber: true, billDate: true, customerName: true } } } })
       : Promise.resolve([]),
+    session?.role === "OWNER" ? prisma.productRateChange.findMany({ where: { productId: id }, orderBy: { changedAt: "desc" }, take: 30 }) : Promise.resolve([]),
   ]);
   const reorderLevel = D(product.reorderLevel);
   const status: StockStatus = stock.isNegative() ? "NEGATIVE" : reorderLevel.greaterThan(0) && stock.lessThanOrEqualTo(reorderLevel) ? "LOW" : "OK";
@@ -157,6 +158,9 @@ export async function getProductDetail(session: Session | null, id: string) {
     id: product.id, sku: product.sku, name: product.name, unit: product.unit, qtyPerCarton: product.qtyPerCarton,
     reorderLevel, stock, status,
     unitPrice: session?.role === "OWNER" ? product.unitPrice : null,
+    rateA: session?.role === "OWNER" ? product.rateA : null,
+    rateC: session?.role === "OWNER" ? product.rateC : null,
+    rateChanges: rateChanges.map((c) => ({ id: c.id, tier: c.tier, oldRate: c.oldRate, newRate: c.newRate, reason: c.reason, changedAt: c.changedAt })),
     movements: movements.map((m) => ({ id: m.id, type: m.type, quantityDelta: m.quantityDelta, reason: m.reason, actorType: m.actorType, createdAt: m.createdAt })),
     recentSales: soldAgg.map((s) => ({ billId: s.bill.id, invoiceNumber: s.bill.invoiceNumber, billDate: s.bill.billDate, customerName: s.bill.customerName, quantity: s.quantity })),
   };

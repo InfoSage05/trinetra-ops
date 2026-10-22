@@ -24,7 +24,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
           <h1 className="flex items-center gap-2 text-xl font-semibold">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
-          <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · ${formatINR(item.unitPrice.toString())} each` : ""}</p>
+          <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · Rates: ${item.rateA ? `A ${formatINR(item.rateA.toString())} · ` : ""}B ${formatINR(item.unitPrice.toString())}${item.rateC ? ` · C ${formatINR(item.rateC.toString())}` : ""}` : ""}</p>
         </div>
         {isOwner && <Link href={`/billing/new?product=${item.id}`} className={buttonVariants({ size: "lg" })}>Bill this item</Link>}
       </div>
@@ -53,6 +53,20 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
           {item.movements.length === 0 && <li className="p-6 text-center text-muted-foreground">No movements yet.</li>}
         </ul>
       </section>
+
+      {isOwner && item.rateChanges.length > 0 && (
+        <section data-testid="rate-history">
+          <h2 className="mb-2 font-semibold">Rate history</h2>
+          <ul className="divide-y rounded-md border bg-background">
+            {item.rateChanges.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+                <span className="mr-auto">Rate {c.tier}: {c.oldRate ? formatINR(c.oldRate.toString()) : "not set"} → {c.newRate ? formatINR(c.newRate.toString()) : "same as B"}{c.reason ? ` · ${c.reason}` : ""}</span>
+                <span className="text-muted-foreground">{formatDateIN(c.changedAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {isOwner && item.recentSales.length > 0 && (
         <section>

@@ -8,12 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
 import { RatesTable } from "@/components/rates-table";
-import { createProductAction, importProductsAction, setAllGstRateAction, setProductActiveAction, updateProductAction } from "@/actions/products";
+import { adjustRatesAction, createProductAction, importProductsAction, setAllGstRateAction, setProductActiveAction, updateProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
 
-type Product = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; gstRate: string; reorderLevel: string; isActive: boolean };
-const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", gstRate: "5", reorderLevel: "0" };
+type Product = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; reorderLevel: string; isActive: boolean };
+const EMPTY = { sku: "", name: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", rateA: "", rateC: "", gstRate: "5", reorderLevel: "0" };
 type Editing = typeof EMPTY & { id?: string };
 type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate: number; toUpdate: number; created: number; updated: number };
 
@@ -22,6 +22,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"items" | "rates">("items");
   const [gstAll, setGstAll] = useState<string | null>(null);
+  const [bump, setBump] = useState<{ percent: string; tiers: ("A" | "B" | "C")[] } | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -51,6 +52,7 @@ export function ProductsManager({ products }: { products: Product[] }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">Products</h1>
+        <Button variant="outline" onClick={() => setBump({ percent: "", tiers: ["A", "B", "C"] })}>Change all rates by %</Button>
         <Button variant="outline" onClick={() => setGstAll("5")}>Set GST for all items</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}>Import from Excel</Button>
         <Button onClick={() => setEditing({ ...EMPTY })}>Add product</Button>
@@ -66,9 +68,9 @@ export function ProductsManager({ products }: { products: Product[] }) {
           <li key={p.id} className="flex flex-wrap items-center gap-3 p-3">
             <div className="mr-auto">
               <p className="font-medium">{p.name} {!p.isActive && <Badge variant="secondary">Inactive</Badge>} {Number(p.unitPrice) === 0 && <Badge variant="destructive">Price not set</Badge>}</p>
-              <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · {formatINR(p.unitPrice)}/{p.unit}</p>
+              <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · Rates {p.rateA ? `A ${formatINR(p.rateA)} · ` : ""}B {formatINR(p.unitPrice)}{p.rateC ? ` · C ${formatINR(p.rateC)}` : ""} per {p.unit}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", rateA: p.rateA ?? "", rateC: p.rateC ?? "", qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
             <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setProductActiveAction({ id: p.id, isActive: !p.isActive }))) router.refresh(); }}>
               {p.isActive ? "Deactivate" : "Activate"}
             </Button>
@@ -84,13 +86,40 @@ export function ProductsManager({ products }: { products: Product[] }) {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field id="name" label="Name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} hint="You can rename an item any time. Bills already made keep the name they were printed with." />
               <Field id="sku" label="Code (optional)" value={editing.sku} onChange={(e) => setEditing({ ...editing, sku: e.target.value })} hint="Leave empty if you do not use item codes" />
-              <Field id="price" label="Price (before GST)" inputMode="decimal" value={editing.unitPrice} onChange={(e) => setEditing({ ...editing, unitPrice: e.target.value })} />
+              <Field id="price" label="Rate B: normal wholesalers (before GST)" inputMode="decimal" value={editing.unitPrice} onChange={(e) => setEditing({ ...editing, unitPrice: e.target.value })} hint="The standard rate" />
+              <Field id="rateA" label="Rate A: big wholesalers (optional)" inputMode="decimal" value={editing.rateA} onChange={(e) => setEditing({ ...editing, rateA: e.target.value })} hint="Lowest rate. Empty means same as B" />
+              <Field id="rateC" label="Rate C: direct vendors (optional)" inputMode="decimal" value={editing.rateC} onChange={(e) => setEditing({ ...editing, rateC: e.target.value })} hint="Highest rate, like near Diwali. Empty means same as B" />
               <Field id="unit" label="Unit" value={editing.unit} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} />
               <Field id="qpc" label="Pieces in one carton" inputMode="numeric" value={editing.qtyPerCarton} onChange={(e) => setEditing({ ...editing, qtyPerCarton: e.target.value })} hint="Different for each item, e.g. 12 for birthday candles, 40 for masjid candles" />
               <Field id="hsn" label="HSN code" inputMode="numeric" value={editing.hsnCode} onChange={(e) => setEditing({ ...editing, hsnCode: e.target.value })} />
               <Field id="gst" label="GST %" inputMode="decimal" value={editing.gstRate} onChange={(e) => setEditing({ ...editing, gstRate: e.target.value })} hint="Confirm with your CA" />
               <Field id="reorder" label="Warn when stock falls to" inputMode="decimal" value={editing.reorderLevel} onChange={(e) => setEditing({ ...editing, reorderLevel: e.target.value })} />
               <Button className="sm:col-span-2" size="lg" onClick={save}>Save</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bump !== null} onOpenChange={(open) => { if (!open) setBump(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Change all rates by a percentage</DialogTitle></DialogHeader>
+          {bump && (
+            <div className="space-y-3">
+              <Field id="bump-percent" label="Percent change" inputMode="decimal" value={bump.percent} onChange={(e) => setBump({ ...bump, percent: e.target.value })} hint="Type 5 to raise every rate by 5%, or -3 to lower by 3%. Use this when the price of wax changes." />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Which rates?</p>
+                {(["A", "B", "C"] as const).map((t) => (
+                  <label key={t} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={bump.tiers.includes(t)} onChange={(e) => setBump({ ...bump, tiers: e.target.checked ? [...bump.tiers, t] : bump.tiers.filter((x) => x !== t) })} />
+                    {t === "A" ? "Rate A (big wholesalers)" : t === "B" ? "Rate B (normal wholesalers)" : "Rate C (direct vendors)"}
+                  </label>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground">Only rates that are already set are changed. New bills use the new rates; bills already made keep the old ones. Every change is saved in each item&apos;s rate history.</p>
+              <Button size="lg" className="w-full" onClick={async () => {
+                const done = await callAction(adjustRatesAction({ percent: bump.percent, tiers: bump.tiers }));
+                if (done) { toast.success(done.changedItems === 0 ? "No rates were set, so nothing changed" : `Rates changed by ${done.percent}% on ${done.changedItems} item(s)`); setBump(null); router.refresh(); }
+              }}>Change the rates</Button>
             </div>
           )}
         </DialogContent>
