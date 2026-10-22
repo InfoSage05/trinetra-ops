@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
 import { CHARGE_FIELDS, QTY_UNITS, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
-import { rateFor, type RateTier } from "@/lib/rates";
+import type { RateTier } from "@/lib/rates";
+import { RateChoicePicker } from "@/components/rate-choice";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { D, amountInWords, formatAmount, formatQuantity } from "@/lib/money";
@@ -199,7 +200,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                 <td className={td}>
                   <ItemCell
                     product={product} products={products} dataCell={cell("item")}
-                    onPick={(p) => onEdit(i, { productId: p?.id ?? "", unitPrice: "" })}
+                    onPick={(p) => onEdit(i, { productId: p?.id ?? "", rateChoice: "bill", unitPrice: "" })}
                     onNext={() => focusCell(i, COL.quantity)} onFocusRow={() => onActivate(i)} onArrow={(d) => focusCell(i + d, COL.item)}
                   />
                 </td>
@@ -219,8 +220,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                 </td>
                 <td className={`${num} font-medium`} data-testid="sheet-total-qty">{product && D(pieces).greaterThan(0) ? `${formatQuantity(pieces)} ${product.unit}` : ""}</td>
                 <td className={td}>
-                  <input data-cell={cell("rate")} aria-label="Rate" inputMode="decimal" disabled={!product} placeholder={product ? formatQuantity(rateFor(product, rateTier)) : ""} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed"
-                    value={line?.unitPrice ?? ""} onChange={(e) => onEdit(i, { unitPrice: e.target.value })} onKeyDown={keys(i, COL.rate)} onFocus={(e) => e.currentTarget.select()} />
+                  {product && line ? <RateChoicePicker compact product={product} line={line} billTier={rateTier} cellName={cell("rate")} onKeyDown={keys(i, COL.rate)} onChange={(patch) => onEdit(i, patch)} /> : <input disabled aria-label="Rate" className="w-full bg-transparent px-1 py-1.5" />}
                 </td>
                 <td className={td}>
                   <input data-cell={cell("discount")} aria-label="Discount" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"

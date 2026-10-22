@@ -17,7 +17,8 @@ import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
 import { GstSummary } from "@/components/gst-summary";
 import { CHARGE_FIELDS, QTY_UNITS, blankLine, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
-import { RATE_TIERS, RATE_TIER_LABELS, rateFor, type RateTier } from "@/lib/rates";
+import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
+import { RateChoicePicker } from "@/components/rate-choice";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
@@ -83,7 +84,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     lines: filledLines.map((l) => ({
       productId: l.productId,
       quantity: pieceCount(l), // whatever unit it was typed in (cartons, dozens, pieces), the bill is worked out in pieces
-      ...(l.unitPrice ? { unitPrice: l.unitPrice } : {}),
+      ...(l.unitPrice.trim() ? { unitPrice: l.unitPrice.trim() } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
     charges: CHARGE_FIELDS.filter((c) => charges[c.kind].trim() !== "" && Number(charges[c.kind]) !== 0).map((c) => ({ kind: c.kind, amount: charges[c.kind].trim() })),
@@ -222,7 +223,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                     <span className="text-sm text-muted-foreground">Sl no {index + 1}</span>
                     {lines.length > 1 && <Button variant="ghost" size="sm" onClick={() => setLines(lines.filter((l) => l.rowId !== line.rowId))}>Remove</Button>}
                   </div>
-                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, unitPrice: "" }); setActiveIndex(index); }} />
+                  <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, rateChoice: "bill", unitPrice: "" }); setActiveIndex(index); }} />
                   {product && (
                     <>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -237,7 +238,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                         <div className="space-y-1"><Label>Total qty</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="total-qty">{formatQuantity(pieces)} {product.unit}</p></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="space-y-1"><Label>Rate</Label><Input aria-label="Rate" className="h-12" inputMode="decimal" placeholder={formatQuantity(rateFor(product, rateTier))} value={line.unitPrice} onChange={(e) => update(line.rowId, { unitPrice: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Rate</Label><RateChoicePicker product={product} line={line} billTier={rateTier} onChange={(patch) => update(line.rowId, patch)} /></div>
                         <div className="space-y-1"><Label>Discount ₹</Label><Input aria-label="Discount" className="h-12" inputMode="decimal" placeholder="0" value={line.discountAmount} onChange={(e) => update(line.rowId, { discountAmount: e.target.value })} /></div>
                         <div className="space-y-1"><Label>GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3">{formatQuantity(product.gstRate)}%</p></div>
                         <div className="space-y-1"><Label>Total amount</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{pl ? formatINR(pl.lineTotal) : "-"}</p></div>

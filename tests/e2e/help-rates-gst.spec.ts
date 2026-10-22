@@ -110,6 +110,17 @@ test("the bill starts at the customer's rate type, and it can be switched betwee
   await group.getByRole("button", { name: /Rate B/ }).click();
   await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "100");
 
+  // Each line can also pick any of the item's three rates, or an own rate, from its own drop-down.
+  const choice = page.getByLabel("Rate choice");
+  await choice.selectOption("C");
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "130");
+  await choice.selectOption("custom");
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveValue("130"); // starts from the rate it was on
+  await page.getByLabel("Rate", { exact: true }).fill("95");
+  await expect(choice).toHaveValue("custom");
+  await page.getByLabel("Rate", { exact: true }).fill("");
+  await choice.selectOption("bill");
+
   // The server's total uses the chosen rate: 10 pieces at Rate A = 800 before GST.
   await group.getByRole("button", { name: /Rate A/ }).click();
   await page.getByLabel("Unit", { exact: true }).selectOption("piece");

@@ -37,6 +37,8 @@ export const billLineSchema = z
     cartons: nonNegativeQuantity.optional(),
     loosePieces: nonNegativeQuantity.optional(),
     unitPrice: money.optional(),
+    /** Use this one rate of the item (A, B or C) for just this line, instead of the bill's rate type. */
+    rateTier: z.enum(RATE_TIERS).optional(),
     discountAmount: money.optional(),
   })
   .superRefine((line, ctx) => {
@@ -115,7 +117,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
       : D(line.cartons ?? 0).times(qtyPerCarton).plus(D(line.loosePieces ?? 0));
     if (!qty.greaterThan(0)) throw new ValidationError(`Line ${index + 1} (${product.name}): enter at least 1 carton or piece.`);
 
-    const unitPrice = line.unitPrice !== undefined ? D(line.unitPrice) : rateFor(product, rateTier);
+    const unitPrice = line.unitPrice !== undefined ? D(line.unitPrice) : rateFor(product, line.rateTier ?? rateTier);
     let amounts: LineAmounts;
     try {
       amounts = computeLine({ quantity: qty, unitPrice, discountAmount: line.discountAmount, gstRate: product.gstRate }, interState);

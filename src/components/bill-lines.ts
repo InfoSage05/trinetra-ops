@@ -8,7 +8,9 @@ export const QTY_UNITS: { value: QtyUnit; label: string }[] = [
 ];
 
 /** One row of a bill being typed. Shared by the card layout and the Excel-sheet layout so switching never loses anything. */
-export type Line = { rowId: number; productId: string; qty: string; unit: QtyUnit; unitPrice: string; discountAmount: string };
+/** Which rate a line uses: the bill's rate type, one of the item's three rates, or a number typed in (unitPrice). */
+export type RateChoice = "bill" | "A" | "B" | "C";
+export type Line = { rowId: number; productId: string; qty: string; unit: QtyUnit; rateChoice: RateChoice; unitPrice: string; discountAmount: string };
 export type ChargeKey = "CARTON" | "CRATE" | "FREIGHT";
 export type Charges = Record<ChargeKey, string>;
 
@@ -20,7 +22,7 @@ let nextRowId = 1;
 // New rows start in the unit last used, so a dealer who always orders in dozens does not have to switch every row.
 let lastUnit: QtyUnit = "carton";
 export const rememberUnit = (unit: QtyUnit) => { lastUnit = unit; };
-export const blankLine = (productId = ""): Line => ({ rowId: nextRowId++, productId, qty: "", unit: lastUnit, unitPrice: "", discountAmount: "" });
+export const blankLine = (productId = ""): Line => ({ rowId: nextRowId++, productId, qty: "", unit: lastUnit, rateChoice: "bill", unitPrice: "", discountAmount: "" });
 
 /** Pieces in one of the chosen unit for this item. */
 export function piecesPerUnit(unit: QtyUnit, qtyPerCarton: number): number {

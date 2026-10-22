@@ -39,6 +39,16 @@ describe("three rates per item", () => {
     expect(rateFor(plain, "C").toString()).toBe("50");
   });
 
+  it("one line can use any of the item's three rates, whatever the bill's rate type is", async () => {
+    const { owner, item } = await world();
+    const customer = await makeCustomer({ name: "Mixed" });
+    const preview = await previewBill(owner, {
+      customerId: customer.id, placeOfSupply: "21", rateTier: "B",
+      lines: [{ productId: item.id, quantity: "1", rateTier: "A" }, { productId: item.id, quantity: "1", rateTier: "C" }, { productId: item.id, quantity: "1" }, { productId: item.id, quantity: "1", rateTier: "A", unitPrice: "77" }],
+    });
+    expect(preview.lines.map((l) => l.unitPrice.toString())).toEqual(["80", "130", "100", "77"]); // A, C, the bill's B, then a typed rate beats a chosen one
+  });
+
   it("a bill uses the customer's rate type, the bill can override it, and a typed rate beats both", async () => {
     const { owner, item } = await world();
     const big = await createCustomer(owner, { name: "Big Wholesaler", billingAddress: "x", stateCode: "21", rateTier: "A" });
