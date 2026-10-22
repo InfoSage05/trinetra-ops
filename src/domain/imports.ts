@@ -11,7 +11,7 @@ function pick(values: Record<string, string>, aliases: string[]): string | undef
   return undefined;
 }
 
-export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; unit?: string; qtyPerCarton?: string; reorderLevel?: string };
+export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; rateA?: string; rateC?: string; unit?: string; qtyPerCarton?: string; reorderLevel?: string };
 export type OpeningRowInput = { rowNumber: number; sku?: string; name?: string; quantity?: string };
 
 export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
@@ -21,7 +21,9 @@ export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
     name: pick(v, ["name", "productname", "item"]),
     hsnCode: pick(v, ["hsn", "hsncode"]),
     gstRate: pick(v, ["gst", "gstrate", "gstpercent", "taxrate"]),
-    unitPrice: pick(v, ["price", "unitprice", "rate", "mrp"]),
+    unitPrice: pick(v, ["price", "unitprice", "rate", "mrp", "rateb", "priceb"]),
+    rateA: pick(v, ["ratea", "pricea"]),
+    rateC: pick(v, ["ratec", "pricec"]),
     unit: pick(v, ["unit", "uom"]),
     qtyPerCarton: pick(v, ["qtypercarton", "qtypercartoon", "piecespercarton", "pcspercarton", "pcspercartoon", "qtyperctn", "cartonsize", "cartonqty", "percarton"]),
     reorderLevel: pick(v, ["reorderlevel", "reorder", "minstock"]),
@@ -85,7 +87,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
 
   await prisma.$transaction(async (tx) => {
     for (const { data: p, sizeGiven, existingId } of planned) {
-      const data = { ...p, sku: p.sku ?? null, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
+      const data = { ...p, sku: p.sku ?? null, rateA: p.rateA ? toFixed2(p.rateA) : null, rateC: p.rateC ? toFixed2(p.rateC) : null, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
       if (!existingId) {
         await tx.product.create({ data });
       } else {

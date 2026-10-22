@@ -7,6 +7,7 @@ import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { stateName } from "@/lib/gst";
 import { D, ZERO, toFixed2 } from "@/lib/money";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
+import { RATE_TIERS, rateFor, type RateTier } from "@/lib/rates";
 import { financialYearOf } from "@/lib/time";
 import {
   entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveMoney, quantity, stateCode,
@@ -57,6 +58,8 @@ export const billDraftSchema = z.object({
   placeOfSupply: stateCode,
   deliveryAddress: optionalText(300),
   notes: optionalText(500),
+  /** Which of the three rates this bill uses; if left out, the customer's own rate type is used. */
+  rateTier: z.enum(RATE_TIERS).optional(),
   lines: z.array(billLineSchema).min(1, "Add at least one item.").max(MAX_BILL_ITEMS, `A bill can have at most ${MAX_BILL_ITEMS} items. Make a second bill for the rest.`),
   charges: z
     .array(billChargeSchema)
@@ -85,7 +88,7 @@ export type PreviewCharge = TaxSplit & {
 
 export type BillPreview = DocumentTotals & {
   customerId: string; customerName: string; placeOfSupply: string; placeOfSupplyName: string;
-  interState: boolean; hasShortfall: boolean; lines: PreviewLine[]; charges: PreviewCharge[];
+  interState: boolean; rateTier: RateTier; hasShortfall: boolean; lines: PreviewLine[]; charges: PreviewCharge[];
 };
 
 /** Shared by previewBill and createBill: always computed from current database state. */
@@ -99,6 +102,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
   const products = new Map((await db.product.findMany({ where: { id: { in: productIds } } })).map((p) => [p.id, p]));
   const remaining = await getStockLevels(db, productIds);
   const interState = isInterState(profile.stateCode, draft.placeOfSupply);
+  const rateTier: RateTier = draft.rateTier ?? customer.rateTier;
 
   const lines: PreviewLine[] = draft.lines.map((line, index) => {
     const product = products.get(line.productId);
@@ -111,7 +115,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
       : D(line.cartons ?? 0).times(qtyPerCarton).plus(D(line.loosePieces ?? 0));
     if (!qty.greaterThan(0)) throw new ValidationError(`Line ${index + 1} (${product.name}): enter at least 1 carton or piece.`);
 
-    const unitPrice = D(line.unitPrice ?? product.unitPrice);
+    const unitPrice = line.unitPrice !== undefined ? D(line.unitPrice) : rateFor(product, rateTier);
     let amounts: LineAmounts;
     try {
       amounts = computeLine({ quantity: qty, unitPrice, discountAmount: line.discountAmount, gstRate: product.gstRate }, interState);
@@ -148,7 +152,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
     ...computeTotals([...lines, ...charges.map((c) => ({ ...c, grossAmount: c.taxableValue, discountAmount: ZERO }))]),
     customerId: customer.id, customerName: customer.name,
     placeOfSupply: draft.placeOfSupply, placeOfSupplyName: stateName(draft.placeOfSupply),
-    interState, hasShortfall: lines.some((l) => l.shortfallQuantity !== null), lines, charges,
+    interState, rateTier, hasShortfall: lines.some((l) => l.shortfallQuantity !== null), lines, charges,
   };
   return { preview, profile, customer };
 }
@@ -217,7 +221,7 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
           taxableTotal: toFixed2(preview.taxableTotal), cgstTotal: toFixed2(preview.cgstTotal),
           sgstTotal: toFixed2(preview.sgstTotal), igstTotal: toFixed2(preview.igstTotal),
           taxTotal: toFixed2(preview.taxTotal), roundOff: toFixed2(preview.roundOff), grandTotal: toFixed2(preview.grandTotal),
-          createdBy: session.userId, idempotencyKey: key, orderId: input.orderId ?? null,
+          createdBy: session.userId, idempotencyKey: key, orderId: input.orderId ?? null, rateTier: preview.rateTier,
           lineItems: {
             create: preview.lines.map((l, i) => ({
               lineNo: i + 1, productId: l.productId, productName: l.productName, productSku: l.productSku,
@@ -273,7 +277,7 @@ export async function listBillableProducts(session: Session | null) {
   requireRole(session, ["OWNER"]);
   const products = await prisma.product.findMany({
     where: { isActive: true },
-    select: { id: true, sku: true, name: true, unit: true, qtyPerCarton: true, reorderLevel: true, unitPrice: true, gstRate: true },
+    select: { id: true, sku: true, name: true, unit: true, qtyPerCarton: true, reorderLevel: true, unitPrice: true, rateA: true, rateC: true, gstRate: true },
     orderBy: { name: "asc" },
   });
   const levels = await getStockLevels(prisma, products.map((p) => p.id));

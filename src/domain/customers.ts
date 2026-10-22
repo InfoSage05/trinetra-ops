@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError } from "@/lib/errors";
 import { stateCodeFromGstin } from "@/lib/gst";
+import { RATE_TIERS } from "@/lib/rates";
 import { entityId, optionalGstin, parseInput, requiredText, stateCode } from "@/lib/validation";
 
 const optionalPhone = z
@@ -17,6 +18,7 @@ const customerFields = z.object({
   gstin: optionalGstin,
   billingAddress: requiredText("Address", 300),
   stateCode,
+  rateTier: z.enum(RATE_TIERS).default("B"),
 });
 
 const stateMatchesGstin = (c: { gstin?: string; stateCode: string }) => !c.gstin || stateCodeFromGstin(c.gstin) === c.stateCode;

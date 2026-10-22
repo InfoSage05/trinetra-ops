@@ -17,6 +17,13 @@ enum ActorType {
   AGENT
 }
 
+/// Which of the three rates a customer is normally billed at: A big wholesalers, B normal wholesalers, C direct vendors.
+enum RateTier {
+  A
+  B
+  C
+}
+
 enum OrderSource {
   MANUAL
   TEXT
@@ -87,6 +94,7 @@ model Customer {
   billingAddress String
   stateCode      String
   isActive       Boolean  @default(true)
+  rateTier       RateTier @default(B)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   bills          Bill[]
@@ -97,22 +105,28 @@ model Customer {
 }
 
 model Product {
-  id                 String             @id @default(cuid())
-  sku                String?            @unique
+  id                 String              @id @default(cuid())
+  sku                String?             @unique
   name               String
-  unit               String             @default("pcs")
-  qtyPerCarton       Int                @default(1)
+  unit               String              @default("pcs")
+  qtyPerCarton       Int                 @default(1)
   hsnCode            String
-  unitPrice          Decimal            @db.Decimal(12, 2)
-  gstRate            Decimal            @db.Decimal(5, 2)
-  reorderLevel       Decimal            @default(0) @db.Decimal(12, 2)
-  isActive           Boolean            @default(true)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  /// Rate B (normal wholesalers); also what any bill uses when a tier has no rate of its own.
+  unitPrice          Decimal             @db.Decimal(12, 2)
+  /// Rate A (big wholesalers, lowest). Empty means "same as Rate B".
+  rateA              Decimal?            @db.Decimal(12, 2)
+  /// Rate C (direct vendors, highest). Empty means "same as Rate B".
+  rateC              Decimal?            @db.Decimal(12, 2)
+  gstRate            Decimal             @db.Decimal(5, 2)
+  reorderLevel       Decimal             @default(0) @db.Decimal(12, 2)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   stockLedgerEntries StockLedgerEntry[]
   stockCounts        StockCount[]
   billLineItems      BillLineItem[]
   orderLines         OrderLine[]
+  rateChanges        ProductRateChange[]
 
   @@index([name])
   @@map("products")
@@ -184,6 +198,7 @@ model Bill {
   createdAt         DateTime          @default(now())
   lineItems         BillLineItem[]
   charges           BillCharge[]
+  rateTier          RateTier          @default(B)
   orderId           String?
   order             Order?            @relation(fields: [orderId], references: [id], onDelete: Restrict)
   payments          PaymentLogEntry[]
@@ -390,4 +405,20 @@ model OrderLine {
   @@unique([orderId, lineNo])
   @@index([productId])
   @@map("order_lines")
+}
+
+/// Every change to an item's rates, kept forever, so price moves with the wax price can be looked back on.
+model ProductRateChange {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  tier      RateTier
+  oldRate   Decimal? @db.Decimal(12, 2)
+  newRate   Decimal? @db.Decimal(12, 2)
+  reason    String?
+  changedBy String
+  changedAt DateTime @default(now())
+
+  @@index([productId, changedAt])
+  @@map("product_rate_changes")
 }
