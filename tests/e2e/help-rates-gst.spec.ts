@@ -141,3 +141,19 @@ test("owner raises every rate by a percentage when the wax price goes up", async
   await expect(page.getByLabel("Rate A of E2E Tier Candle")).toHaveValue("88.00");
   await expect(page.getByLabel("Rate C of E2E Tier Candle")).toHaveValue("143.00");
 });
+
+test("rates show a carton rate and a piece rate side by side, and either can be typed", async ({ page }) => {
+  await login(page, E2E_OWNER);
+  await page.goto("/products");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Rates and names" }).click();
+  const piece = Number(await page.getByLabel("Rate B of E2E Sheet Candle", { exact: true }).inputValue());
+  await expect(page.getByLabel("Per carton B for E2E Sheet Candle")).toHaveValue((piece * 6).toFixed(2)); // 6 pieces per carton
+  await page.getByLabel("Per carton B for E2E Sheet Candle").fill("600");
+  await expect(page.getByLabel("Rate B of E2E Sheet Candle", { exact: true })).toHaveValue("100.00"); // 600 / 6
+  await page.locator("li", { has: page.getByLabel("Per carton B for E2E Sheet Candle") }).getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Rates and names" }).click();
+  await expect(page.getByLabel("Per carton B for E2E Sheet Candle")).toHaveValue("600.00");
+});

@@ -8,7 +8,7 @@ import { quickEditProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatQuantity } from "@/lib/money";
 
-type Item = { id: string; name: string; size: string | null; categoryId: string | null; categoryName: string | null; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; unit: string; isActive: boolean };
+type Item = { id: string; name: string; qtyPerCarton: number; size: string | null; categoryId: string | null; categoryName: string | null; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; unit: string; isActive: boolean };
 
 const show = (v: string | null) => (v === null || Number(v) === 0 ? "" : Number(v).toFixed(2));
 
@@ -19,6 +19,8 @@ function RateRow({ item }: { item: Item }) {
   const [name, setName] = useState(item.name);
   const [rates, setRates] = useState(shown);
   const [busy, setBusy] = useState(false);
+  // What was typed in a Carton box (null = show the worked-out figure). Stored rates are always per piece.
+  const [cartonTyped, setCartonTyped] = useState<{ A: string | null; B: string | null; C: string | null }>({ A: null, B: null, C: null });
   const changedName = name.trim() !== item.name;
   // Rate B must have a number; A and C may be emptied to mean "same as Rate B".
   const changed = {
@@ -44,21 +46,45 @@ function RateRow({ item }: { item: Item }) {
     if (ok) router.refresh();
   }
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && anyChange && !busy) void save(); };
-  const rateInput = (tier: "A" | "B" | "C", placeholder: string) => (
-    <Input
-      aria-label={`Rate ${tier} of ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-11 w-24 text-right"
-      value={rates[tier]} onChange={(e) => setRates({ ...rates, [tier]: e.target.value })} onKeyDown={onEnter}
-    />
-  );
+  const qpc = item.qtyPerCarton;
+  const cartonOf = (piece: string) => {
+    const n = Number(piece);
+    return piece.trim() === "" || !Number.isFinite(n) ? "" : (n * qpc).toFixed(2);
+  };
+  const setPiece = (tier: "A" | "B" | "C", value: string) => { setRates({ ...rates, [tier]: value }); setCartonTyped({ ...cartonTyped, [tier]: null }); };
+  const setCarton = (tier: "A" | "B" | "C", value: string) => {
+    const n = Number(value);
+    setCartonTyped({ ...cartonTyped, [tier]: value });
+    setRates({ ...rates, [tier]: value.trim() === "" || !Number.isFinite(n) ? "" : (n / qpc).toFixed(2) });
+  };
+  const rateBox = (tier: "A" | "B" | "C", label: string, placeholder: string) => {
+    const roundedCarton = cartonOf(rates[tier]);
+    const typed = cartonTyped[tier];
+    const off = typed !== null && typed.trim() !== "" && roundedCarton !== "" && Math.abs(Number(typed) - Number(roundedCarton)) >= 0.005;
+    return (
+      <div className="rounded-lg border bg-muted/30 p-2" data-testid={`rate-box-${tier}`}>
+        <p className="mb-1 text-xs font-semibold text-muted-foreground">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Carton ₹</span>
+          <Input aria-label={`Per carton ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
+            value={typed ?? roundedCarton} onChange={(e) => setCarton(tier, e.target.value)} onKeyDown={onEnter} />
+          <span className="text-xs text-muted-foreground">Piece ₹</span>
+          <Input aria-label={`Rate ${tier} of ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
+            value={rates[tier]} onChange={(e) => setPiece(tier, e.target.value)} onKeyDown={onEnter} />
+        </div>
+        {off && <p className="mt-1 text-xs text-amber-700">Saved per piece as ₹{rates[tier]}, so a carton works out to ₹{roundedCarton}.</p>}
+      </div>
+    );
+  };
 
   return (
     <li className="flex flex-wrap items-center gap-2 p-3" data-testid="rate-row">
       {item.size && <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="size-badge">Size {item.size}</span>}
       <Input aria-label={`Name of ${item.name}`} className="h-11 min-w-0 flex-1 basis-56" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
-      <div className="flex items-center gap-1.5">
-        <span className="text-sm text-muted-foreground">₹ A</span>{rateInput("A", "as B")}
-        <span className="text-sm text-muted-foreground">B</span>{rateInput("B", "not set")}
-        <span className="text-sm text-muted-foreground">C</span>{rateInput("C", "as B")}
+      <div className="flex w-full flex-wrap gap-2">
+        {rateBox("A", `Rate A · big wholesalers (1 carton = ${qpc})`, "as B")}
+        {rateBox("B", "Rate B · normal wholesalers", "not set")}
+        {rateBox("C", "Rate C · direct vendors", "as B")}
       </div>
       <span className="w-16 text-sm text-muted-foreground">GST {formatQuantity(item.gstRate)}%</span>
       {Number(item.unitPrice) === 0 && !changed.B && <Badge variant="destructive">Price not set</Badge>}

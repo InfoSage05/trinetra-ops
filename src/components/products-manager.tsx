@@ -142,7 +142,7 @@ export function ProductsManager({ products, categories }: { products: Product[];
                         <p className="font-medium">
                           {p.name} {p.size && <Badge variant="outline" data-testid="size-badge">Size {p.size}</Badge>} {!p.isActive && <Badge variant="secondary">Inactive</Badge>} {Number(p.unitPrice) === 0 && <Badge variant="destructive">Price not set</Badge>}
                         </p>
-                        <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · Rates {p.rateA ? `A ${formatINR(p.rateA)} · ` : ""}B {formatINR(p.unitPrice)}{p.rateC ? ` · C ${formatINR(p.rateC)}` : ""} per {p.unit}</p>
+                        <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · Per piece: {p.rateA ? `A ${formatINR(p.rateA)} · ` : ""}B {formatINR(p.unitPrice)}{p.rateC ? ` · C ${formatINR(p.rateC)}` : ""} · Per carton: {p.rateA ? `A ${formatINR(Number(p.rateA) * p.qtyPerCarton)} · ` : ""}B {formatINR(Number(p.unitPrice) * p.qtyPerCarton)}{p.rateC ? ` · C ${formatINR(Number(p.rateC) * p.qtyPerCarton)}` : ""}</p>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", size: p.size ?? "", categoryId: p.categoryId ?? "", rateA: p.rateA ?? "", rateC: p.rateC ?? "", qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
                       <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setProductActiveAction({ id: p.id, isActive: !p.isActive }))) router.refresh(); }}>
