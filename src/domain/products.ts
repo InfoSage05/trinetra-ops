@@ -172,7 +172,7 @@ export async function adjustRates(session: Session | null, rawInput: unknown) {
       const before = ratesOf(item);
       const after: RateSet = { A: tiers.has("A") ? bump(before.A) : before.A, B: tiers.has("B") ? bump(before.B) : before.B, C: tiers.has("C") ? bump(before.C) : before.C };
       if (RATE_TIERS.every((t) => sameRate(before[t], after[t]))) continue;
-      await tx.product.update({ where: { id: item.id }, data: { unitPrice: after.B ?? before.B, rateA: after.A, rateC: after.C } });
+      await tx.product.update({ where: { id: item.id }, data: { unitPrice: after.B ?? before.B ?? "0", rateA: after.A, rateC: after.C } });
       await recordRateChanges(tx, item.id, before, after, session.userId, input.reason ?? `All rates ${Number(input.percent) > 0 ? "up" : "down"} ${Math.abs(Number(input.percent))}%`);
       changedItems += 1;
     }
