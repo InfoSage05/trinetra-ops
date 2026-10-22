@@ -21,7 +21,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
   return (
     <header className="sticky top-0 z-20 bg-sidebar text-sidebar-foreground shadow-[0_1px_0_var(--sidebar-border)_inset,0_8px_24px_-16px_rgb(31_16_6_/_0.6)]">
       <div className="mx-auto flex max-w-5xl items-center pl-3 sm:pl-4">
-        <Link href="/dashboard" className="mr-1 flex shrink-0 items-center gap-2.5 self-stretch rounded-md outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70">
+        <Link href="/dashboard" className="mr-2.5 flex shrink-0 items-center gap-2.5 self-stretch rounded-md outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70 md:mr-0">
           <span className="grid size-8 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-[0_2px_6px_rgb(245_158_11_/_0.35)]">
             <FlameKindling className="size-4.5" />
           </span>
@@ -30,6 +30,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
             <span className="block text-[0.65rem] font-medium tracking-[0.22em] text-sidebar-foreground/55 uppercase">Candles</span>
           </span>
         </Link>
+        <span aria-hidden className="mx-2.5 hidden h-5 w-px shrink-0 bg-sidebar-foreground/25 md:block" />
         <nav aria-label="Main" className="flex flex-1 items-center overflow-x-auto py-2.5">
           {links.map(([href, label]) => {
             const active = bestMatch === href;
