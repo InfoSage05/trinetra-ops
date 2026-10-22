@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
+import { ReportInsights } from "@/components/report-insights";
 import { getSession } from "@/lib/session";
+import { getLlmClient } from "@/lib/llm";
 import { describeStock } from "@/lib/cartons";
 import { DomainError } from "@/lib/errors";
 import { formatINR, formatQuantity } from "@/lib/money";
@@ -42,14 +45,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
       </form>
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <ReportInsights key={`${range.from}:${range.to}`} range={range} aiAvailable={getLlmClient() !== null} />
+
       {sales && (
         <section className="space-y-3" data-testid="sales-summary">
           <h2 className="font-semibold">Sales</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile label="Bills" value={String(sales.billCount)} />
-            <Tile label="Billed" value={formatINR(sales.billed)} />
-            <Tile label="Returned (credit notes)" value={formatINR(sales.credited)} />
-            <Tile label="Net sales" value={formatINR(sales.netSales)} />
+            <Tile label="Billed" value={formatINR(sales.billed)} tone="info" />
+            <Tile label="Returned (credit notes)" value={formatINR(sales.credited)} tone="destructive" />
+            <Tile label="Net sales" value={formatINR(sales.netSales)} tone="success" />
           </div>
           <p className="text-sm text-muted-foreground">Taxable {formatINR(sales.taxable)} · CGST {formatINR(sales.cgst)} · SGST {formatINR(sales.sgst)} · IGST {formatINR(sales.igst)}</p>
 
@@ -62,8 +67,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
       <section className="space-y-3" data-testid="dues-ageing">
         <h2 className="font-semibold">Money to collect, by how old the bill is</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {AGEING_BUCKETS.map((b) => <Tile key={b} label={`${b} days`} value={formatINR(ageing.totals[b])} />)}
-          <Tile label="Total" value={formatINR(ageing.grandTotal)} />
+          {AGEING_BUCKETS.map((b, i) => <Tile key={b} label={`${b} days`} value={formatINR(ageing.totals[b])} tone={AGEING_TONES[i]} />)}
+          <Tile label="Total" value={formatINR(ageing.grandTotal)} tone="warning" />
         </div>
         <Table
           title="Customers" head={["Customer", ...AGEING_BUCKETS.map((b) => `${b} d`), "Total"]}
@@ -87,8 +92,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   );
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl bg-card p-3.5 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p><p className="mt-1 text-lg font-bold tabular-nums">{value}</p></div>;
+type TileTone = "default" | "success" | "warning" | "destructive" | "info";
+const TILE_TONES: Record<Exclude<TileTone, "default">, string> = {
+  success: "bg-success/10 ring-success/30",
+  warning: "bg-warning/10 ring-warning/30",
+  destructive: "bg-destructive/10 ring-destructive/25",
+  info: "bg-info/10 ring-info/30",
+};
+/** Money ages in one direction: the older the bucket, the louder the tint. */
+const AGEING_TONES: TileTone[] = ["default", "info", "warning", "destructive"];
+
+function Tile({ label, value, tone = "default" }: { label: string; value: string; tone?: TileTone }) {
+  return <div className={cn("rounded-xl p-3.5 ring-1 shadow-[0_1px_2px_rgb(64_38_16/0.04)]", tone === "default" ? "bg-card ring-foreground/10" : TILE_TONES[tone])}><p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p><p className="mt-1 text-lg font-bold tabular-nums">{value}</p></div>;
 }
 
 function Table({ title, head, rows, link }: { title: string; head: string[]; rows: string[][]; link?: (row: number) => string }) {
