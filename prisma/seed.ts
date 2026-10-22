@@ -45,8 +45,20 @@ async function seedCatalogue() {
   console.log(`Catalogue: added ${newProducts.length} item(s) and ${newCustomers.length} customer(s).`);
 }
 
+/** The category sections the owner asked for. Only the empty sections are created; no item is placed in any of them. */
+async function seedCategories() {
+  const file = new URL("./seed-data/categories.json", import.meta.url);
+  const { categories } = JSON.parse(readFileSync(file, "utf-8")) as { categories: string[] };
+  const have = new Set((await prisma.category.findMany({ select: { name: true } })).map((c) => c.name.toLowerCase()));
+  const missing = categories.filter((n) => !have.has(n.toLowerCase()));
+  const start = (await prisma.category.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? 0;
+  if (missing.length > 0) await prisma.category.createMany({ data: missing.map((name, i) => ({ name, sortOrder: start + i + 1 })) });
+  console.log(`Categories: added ${missing.length} section(s).`);
+}
+
 async function main() {
   await seedOwner();
+  await seedCategories();
   await seedCatalogue();
 }
 

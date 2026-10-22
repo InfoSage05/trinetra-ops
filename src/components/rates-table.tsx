@@ -8,7 +8,7 @@ import { quickEditProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatQuantity } from "@/lib/money";
 
-type Item = { id: string; name: string; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; unit: string; isActive: boolean };
+type Item = { id: string; name: string; size: string | null; categoryId: string | null; categoryName: string | null; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; unit: string; isActive: boolean };
 
 const show = (v: string | null) => (v === null || Number(v) === 0 ? "" : Number(v).toFixed(2));
 
@@ -53,6 +53,7 @@ function RateRow({ item }: { item: Item }) {
 
   return (
     <li className="flex flex-wrap items-center gap-2 p-3" data-testid="rate-row">
+      {item.size && <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="size-badge">Size {item.size}</span>}
       <Input aria-label={`Name of ${item.name}`} className="h-11 min-w-0 flex-1 basis-56" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
       <div className="flex items-center gap-1.5">
         <span className="text-sm text-muted-foreground">₹ A</span>{rateInput("A", "as B")}
@@ -67,10 +68,15 @@ function RateRow({ item }: { item: Item }) {
   );
 }
 
-export function RatesTable({ items }: { items: Item[] }) {
+export function RatesTable({ items, categories }: { items: Item[]; categories: { id: string; name: string }[] }) {
   const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [onlyUnset, setOnlyUnset] = useState(false);
-  const visible = items.filter((i) => i.isActive && i.name.toLowerCase().includes(search.toLowerCase()) && (!onlyUnset || Number(i.unitPrice) === 0));
+  const needle = search.trim().toLowerCase();
+  const visible = items
+    .filter((i) => i.isActive && `${i.name} ${i.size ?? ""} ${i.categoryName ?? ""}`.toLowerCase().includes(needle) && (!onlyUnset || Number(i.unitPrice) === 0))
+    .filter((i) => categoryId === "" || (categoryId === "none" ? i.categoryId === null : i.categoryId === categoryId))
+    .sort((a, b) => (a.categoryName ?? "~").localeCompare(b.categoryName ?? "~") || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   const unset = items.filter((i) => i.isActive && Number(i.unitPrice) === 0).length;
   return (
     <div className="space-y-3" data-testid="rates-table">
@@ -78,7 +84,12 @@ export function RatesTable({ items }: { items: Item[] }) {
         Every item has three rates (price before GST). <b>A</b> is for big wholesalers who take a huge quantity (lowest). <b>B</b> is for normal wholesalers (the standard rate). <b>C</b> is for direct vendors who take a little, like near Diwali (highest). Leave A or C empty to use the B rate. You can also change an item&apos;s name here. New bills use the new rates; bills already made keep the old ones.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Input placeholder="Search item" className="h-11 max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="Search item, size or category" className="h-11 max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select aria-label="Show category" className="h-11 rounded-lg border border-input bg-card px-2.5" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <option value="">All categories</option>
+          <option value="none">Not in any category</option>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={onlyUnset} onChange={(e) => setOnlyUnset(e.target.checked)} /> Only items with no rate yet ({unset})</label>
       </div>
       <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">

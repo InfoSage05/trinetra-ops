@@ -104,12 +104,27 @@ model Customer {
   @@map("customers")
 }
 
+/// A section of the catalogue (for example BIRTHDAY CANDLE) that the owner fills with whichever items he chooses.
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  products  Product[]
+
+  @@map("categories")
+}
+
 model Product {
   id                 String              @id @default(cuid())
   sku                String?             @unique
   name               String
   unit               String              @default("pcs")
   qtyPerCarton       Int                 @default(1)
+  /// A short size label shown beside the name, for example "12" or "3 x 14".
+  size               String?
+  categoryId         String?
+  category           Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   hsnCode            String
   /// Rate B (normal wholesalers); also what any bill uses when a tier has no rate of its own.
   unitPrice          Decimal             @db.Decimal(12, 2)
@@ -129,6 +144,7 @@ model Product {
   rateChanges        ProductRateChange[]
 
   @@index([name])
+  @@index([categoryId])
   @@map("products")
 }
 

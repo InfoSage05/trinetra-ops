@@ -20,14 +20,14 @@ export async function getStockOverview(session: Session | null, rawInput: unknow
       isActive: true,
       ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }] } : {}),
     },
-    select: { id: true, sku: true, name: true, unit: true, qtyPerCarton: true, reorderLevel: true },
+    select: { id: true, sku: true, name: true, size: true, categoryId: true, category: { select: { name: true } }, unit: true, qtyPerCarton: true, reorderLevel: true },
     orderBy: { name: "asc" },
   });
   const levels = await getStockLevels(prisma, products.map((p) => p.id));
   return products.map((p) => {
     const stock = levels.get(p.id) ?? ZERO;
     const status: StockStatus = stock.isNegative() ? "NEGATIVE" : stock.lessThanOrEqualTo(D(p.reorderLevel)) && D(p.reorderLevel).greaterThan(0) ? "LOW" : "OK";
-    return { id: p.id, sku: p.sku, name: p.name, unit: p.unit, qtyPerCarton: p.qtyPerCarton, stock, reorderLevel: D(p.reorderLevel), status };
+    return { id: p.id, sku: p.sku, name: p.name, size: p.size, categoryId: p.categoryId, categoryName: p.category?.name ?? null, unit: p.unit, qtyPerCarton: p.qtyPerCarton, stock, reorderLevel: D(p.reorderLevel), status };
   });
 }
 

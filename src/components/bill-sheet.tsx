@@ -40,7 +40,7 @@ const num = `${td} text-right tabular-nums`;
 function rank(products: BillableProduct[], query: string): BillableProduct[] {
   const q = query.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
-  const haystack = (p: BillableProduct) => `${p.name} ${p.sku ?? ""}`.toLowerCase();
+  const haystack = (p: BillableProduct) => `${p.name} ${p.size ?? ""} ${p.categoryName ?? ""} ${p.sku ?? ""}`.toLowerCase();
   const hits = products.filter((p) => words.every((w) => haystack(p).includes(w)));
   const score = (p: BillableProduct) => (p.name.toLowerCase().startsWith(q) ? 0 : p.name.toLowerCase().includes(q) ? 1 : 2);
   return hits.sort((a, b) => score(a) - score(b));
@@ -67,7 +67,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
       <input
         ref={ref} data-cell={dataCell} aria-label="Item" autoComplete="off" spellCheck={false}
         className="w-full bg-transparent px-1 py-1.5 outline-none focus:bg-yellow-50"
-        value={query ?? product?.name ?? ""} placeholder="type item name"
+        value={query ?? product?.name ?? ""} placeholder="type item name, size or category"
         onFocus={(e) => { onFocusRow(); e.currentTarget.select(); }}
         onBlur={() => setQuery(null)}
         onChange={(e) => {
@@ -97,7 +97,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
               className={`flex cursor-pointer justify-between gap-2 px-2 py-1.5 ${i === highlight ? "bg-yellow-100" : ""}`}
               onMouseDown={(e) => { e.preventDefault(); pick(p); onNext(); }}
             >
-              <span>{p.name}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}</span>
+              <span>{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.categoryName && <span className="text-muted-foreground"> · {p.categoryName}</span>}</span>
               <span className="whitespace-nowrap text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
             </li>
           ))}

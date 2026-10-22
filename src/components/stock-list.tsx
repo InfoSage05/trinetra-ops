@@ -13,12 +13,14 @@ import { callAction } from "@/lib/client/call-action";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { describeStock, toPieces } from "@/lib/cartons";
 
-type Row = { id: string; sku: string | null; name: string; unit: string; qtyPerCarton: number; stock: string; reorderLevel: string; status: "NEGATIVE" | "LOW" | "OK" };
+type Row = { id: string; sku: string | null; name: string; size: string | null; categoryId: string | null; categoryName: string | null; unit: string; qtyPerCarton: number; stock: string; reorderLevel: string; status: "NEGATIVE" | "LOW" | "OK" };
 type Mode = { kind: "produce" | "adjust"; row: Row } | null;
 
 export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const categories = [...new Map(rows.filter((r) => r.categoryId).map((r) => [r.categoryId!, r.categoryName!])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const [mode, setMode] = useState<Mode>(null);
   const [cartons, setCartons] = useState("");
   const [loose, setLoose] = useState("");
@@ -26,7 +28,11 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
   const [reason, setReason] = useState("");
   const [key, renewKey] = useIdempotencyKey();
   const [busy, setBusy] = useState(false);
-  const visible = rows.filter((r) => `${r.name} ${r.sku ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+  const needle = search.trim().toLowerCase();
+  const visible = rows
+    .filter((r) => `${r.name} ${r.size ?? ""} ${r.categoryName ?? ""} ${r.sku ?? ""}`.toLowerCase().includes(needle))
+    .filter((r) => category === "" || (category === "none" ? r.categoryId === null : r.categoryId === category))
+    .sort((a, b) => (a.categoryName ?? "~").localeCompare(b.categoryName ?? "~") || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
 
   async function submit() {
     if (!mode || busy) return;
@@ -45,13 +51,20 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
 
   return (
     <div className="space-y-3">
-      <Input placeholder="Search item" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-wrap gap-2">
+        <Input placeholder="Search item, size or category" className="h-11 min-w-0 flex-1 basis-60" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select aria-label="Show category" className="h-11 rounded-lg border border-input bg-card px-2.5" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">All categories</option>
+          {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          <option value="none">Not in any category</option>
+        </select>
+      </div>
       <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         {visible.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-2 p-3">
             <div className="mr-auto">
-              <Link href={`/inventory/${r.id}`} className="font-medium underline-offset-2 hover:underline">{r.name}</Link>
-              <p className="text-sm text-muted-foreground">{r.sku ? `${r.sku} · ` : ""}<CartonSize key={`${r.id}-${r.qtyPerCarton}`} id={r.id} name={r.name} value={r.qtyPerCarton} unit={r.unit} editable={canAdjust} /></p>
+              <Link href={`/inventory/${r.id}`} className="font-medium underline-offset-2 hover:underline">{r.name}</Link>{r.size && <span className="ml-2 rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="size-badge">Size {r.size}</span>}
+              <p className="text-sm text-muted-foreground">{r.categoryName ? `${r.categoryName} · ` : ""}{r.sku ? `${r.sku} · ` : ""}<CartonSize key={`${r.id}-${r.qtyPerCarton}`} id={r.id} name={r.name} value={r.qtyPerCarton} unit={r.unit} editable={canAdjust} /></p>
             </div>
             <span className="text-right text-sm font-semibold">{describeStock(r.stock, r.qtyPerCarton)}</span>
             {r.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}

@@ -20,6 +20,9 @@ export const productSchema = z.object({
     .transform((v) => v || undefined)
     .refine((v) => v === undefined || /^[A-Z0-9][A-Z0-9_/-]{0,39}$/.test(v), "Code may use letters, digits, - _ / (max 40)"),
   name: requiredText("Name", 120).transform(tidyName),
+  /** A short size label shown beside the name, e.g. "12" or "3 x 14". */
+  size: z.string().trim().max(30, "Keep the size short (30 characters).").optional().transform((v) => v || undefined),
+  categoryId: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().trim().min(1).optional()),
   unit: z.string().trim().min(1).max(20).default("pcs"),
   qtyPerCarton: positiveInt.default(1),
   hsnCode,
@@ -36,7 +39,7 @@ export function tidyName(name: string): string {
 }
 
 function toData(input: z.output<typeof productSchema>) {
-  return { ...input, sku: input.sku ?? null, unitPrice: toFixed2(input.unitPrice), rateA: input.rateA ? toFixed2(input.rateA) : null, rateC: input.rateC ? toFixed2(input.rateC) : null, gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
+  return { ...input, sku: input.sku ?? null, size: input.size ?? null, categoryId: input.categoryId ?? null, unitPrice: toFixed2(input.unitPrice), rateA: input.rateA ? toFixed2(input.rateA) : null, rateC: input.rateC ? toFixed2(input.rateC) : null, gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
 }
 
 async function assertSkuFree(sku: string | undefined, exceptId?: string) {
@@ -65,9 +68,14 @@ async function recordRateChanges(tx: Prisma.TransactionClient, productId: string
   if (rows.length > 0) await tx.productRateChange.createMany({ data: rows });
 }
 
+async function assertCategoryExists(categoryId: string | undefined) {
+  if (categoryId && !(await prisma.category.findUnique({ where: { id: categoryId } }))) throw new NotFoundError("Category");
+}
+
 export async function createProduct(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(productSchema, rawInput);
+  await assertCategoryExists(input.categoryId);
   await assertSkuFree(input.sku);
   await assertNameFree(input.name);
   return prisma.product.create({ data: toData(input) });
@@ -80,6 +88,7 @@ export async function updateProduct(session: Session | null, rawInput: unknown) 
   if (!current) throw new NotFoundError("Product");
   await assertSkuFree(input.sku, id);
   await assertNameFree(input.name, id);
+  await assertCategoryExists(input.categoryId);
   const data = toData(input);
   return prisma.$transaction(async (tx) => {
     const updated = await tx.product.update({ where: { id }, data });
@@ -191,6 +200,29 @@ export async function setAllGstRate(session: Session | null, rawInput: unknown) 
   return { changed: result.count, gstRate: toFixed2(rate) };
 }
 
+/**
+ * Permanently deletes an item that was added by mistake. An item that has ever been billed, made, counted or ordered is
+ * part of the shop's records and cannot be deleted; it can be hidden instead (Deactivate), which keeps every record.
+ */
+export async function deleteProduct(session: Session | null, rawInput: unknown) {
+  requireRole(session, ["OWNER"]);
+  const { id } = parseInput(z.object({ id: entityId }), rawInput);
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) throw new NotFoundError("Product");
+  const [bills, stock, orders, counts] = await Promise.all([
+    prisma.billLineItem.count({ where: { productId: id } }),
+    prisma.stockLedgerEntry.count({ where: { productId: id } }),
+    prisma.orderLine.count({ where: { productId: id } }),
+    prisma.stockCount.count({ where: { productId: id } }),
+  ]);
+  const uses = [bills && `${bills} bill line(s)`, stock && `${stock} stock entr${stock === 1 ? "y" : "ies"}`, orders && `${orders} order line(s)`, counts && `${counts} stock count(s)`].filter(Boolean);
+  if (uses.length > 0) {
+    throw new DomainError("PRODUCT_IN_USE", `${product.name} cannot be deleted because it is already used in ${uses.join(", ")}. Use Deactivate to hide it instead; every record is kept.`);
+  }
+  await prisma.$transaction([prisma.productRateChange.deleteMany({ where: { productId: id } }), prisma.product.delete({ where: { id } })]);
+  return { name: product.name };
+}
+
 export async function setProductActive(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const input = parseInput(z.object({ id: entityId, isActive: z.boolean() }), rawInput);
@@ -200,7 +232,8 @@ export async function setProductActive(session: Session | null, rawInput: unknow
 export async function listProducts(session: Session | null, rawInput: unknown = {}) {
   requireRole(session, ["OWNER"]); // returns prices, so workers use getStockOverview instead
   const input = parseInput(z.object({ search: z.string().trim().optional(), includeInactive: z.boolean().default(false) }), rawInput);
-  return prisma.product.findMany({
+  const rows = await prisma.product.findMany({
+    include: { category: { select: { name: true } } },
     where: {
       ...(input.includeInactive ? {} : { isActive: true }),
       ...(input.search
@@ -209,4 +242,5 @@ export async function listProducts(session: Session | null, rawInput: unknown = 
     },
     orderBy: { name: "asc" },
   });
+  return rows.map(({ category, ...p }) => ({ ...p, categoryName: category?.name ?? null }));
 }

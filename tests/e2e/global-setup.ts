@@ -35,6 +35,9 @@ export default async function globalSetup() {
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Carton Size Me" })).id, "50.00");
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Rate Me", unitPrice: "150.00" })).id, "5.00");
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Tier Candle", unitPrice: "100.00", rateA: "80.00", rateC: "130.00" })).id, "100.00");
+  await f.makeProduct({ sku: null, name: "E2E Sort Me" });
+  await f.makeProduct({ sku: null, name: "E2E Delete Me" });
+  await f.addStock((await f.makeProduct({ sku: null, name: "E2E Used Item" })).id, "5.00");
   await f.makeCustomer({ name: "Tier Traders", rateTier: "C" });
   await f.makeCustomer({ name: "Flow Traders" });
   await f.makeCustomer({ name: "Order Traders" });

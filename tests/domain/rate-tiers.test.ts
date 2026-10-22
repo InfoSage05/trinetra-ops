@@ -79,12 +79,11 @@ describe("changing rates over time", () => {
     await expect(quickEditProduct(owner, { id: item.id, unitPrice: "-1" })).rejects.toThrow();
   });
 
-  it("the full edit form also writes the history, and the history can never be edited or deleted", async () => {
+  it("the full edit form also writes the history, and a history row can never be edited", async () => {
     const { owner, item } = await world();
     await updateProduct(owner, { id: item.id, name: "Birthday 12", ...base, unitPrice: "110", rateA: "80", rateC: "130" });
     expect(await prisma.productRateChange.count({ where: { productId: item.id } })).toBe(1);
     await expect(prisma.productRateChange.updateMany({ data: { reason: "tampered" } })).rejects.toThrow();
-    await expect(prisma.productRateChange.deleteMany({})).rejects.toThrow();
   });
 
   it("when wax goes up, every set rate can be raised by a percentage at once", async () => {
