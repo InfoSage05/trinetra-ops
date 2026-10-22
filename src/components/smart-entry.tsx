@@ -6,17 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { LinesEditor, blankLine, linesReady, piecesOf, toEditable, type CatalogueItem, type EditableLine } from "@/components/proposal-lines";
 import { VoiceRecorder } from "@/components/voice-recorder";
+import { OrderForm } from "@/components/order-form";
 import { applyStockProposalAction, proposeSheetAction, proposeStockUpdateAction } from "@/actions/assistant";
 import type { Plain } from "@/lib/action-result";
 import type { StockProposal } from "@/domain/ai-stock";
 import { callAction } from "@/lib/client/call-action";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 
-type Props = { catalogue: CatalogueItem[]; voiceAvailable: boolean; aiAvailable: boolean; canApproveCounts: boolean };
+type Props = { catalogue: CatalogueItem[]; voiceAvailable: boolean; aiAvailable: boolean; canApproveCounts: boolean; canCreateOrders: boolean; visionAvailable: boolean; customers: { id: string; name: string }[] };
 type Reviewing = { kind: StockProposal["kind"]; channel: "TEXT" | "VOICE" | "SHEET"; extractor: StockProposal["extractor"]; model: string | null; sourceText: string; notes: string[]; lines: EditableLine[] };
 
 /** Type, speak or upload; check what was understood; press Approve. Nothing is saved before Approve. */
-export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveCounts }: Props) {
+export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveCounts, canCreateOrders, visionAvailable, customers }: Props) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [fromVoice, setFromVoice] = useState(false);
@@ -101,6 +102,11 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
         <p className="text-sm text-muted-foreground">Any Excel or CSV list of items and quantities. It becomes counts that the owner approves, so stock is never changed by mistake.</p>
         <input ref={fileInput} type="file" accept=".xlsx,.csv" aria-label="Stock sheet" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} className="block w-full text-sm" />
       </section>
+
+      {/* Owner only: the same photo → order flow as New order, so a photographed order becomes a real order right here. */}
+      {canCreateOrders && (
+        <OrderForm customers={customers} catalogue={catalogue} voiceAvailable={false} aiAvailable={aiAvailable} visionAvailable={visionAvailable} channels={["IMAGE"]} />
+      )}
     </div>
   );
 }

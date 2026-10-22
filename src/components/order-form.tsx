@@ -13,6 +13,8 @@ import { callAction } from "@/lib/client/call-action";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { shrinkImage } from "@/lib/client/shrink-image";
 
+type Channel = "TEXT" | "VOICE" | "MANUAL" | "IMAGE";
+
 type Props = {
   customers: { id: string; name: string }[];
   catalogue: CatalogueItem[];
@@ -20,6 +22,8 @@ type Props = {
   aiAvailable: boolean;
   visionAvailable: boolean;
   initialCustomerId?: string;
+  /** Which capture routes render here. New order shows all four; Smart entry shows only the photo route. */
+  channels?: Channel[];
 };
 
 type Draft = {
@@ -27,7 +31,7 @@ type Draft = {
   customerId: string; dueDate: string; lines: EditableLine[];
 };
 
-export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, visionAvailable, initialCustomerId = "" }: Props) {
+export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, visionAvailable, initialCustomerId = "", channels = ["TEXT", "VOICE", "MANUAL", "IMAGE"] }: Props) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [fromVoice, setFromVoice] = useState(false);
@@ -87,24 +91,33 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
   }
 
   if (!draft) {
+    const showText = channels.includes("TEXT");
+    const showPhotos = channels.includes("IMAGE");
+    const showVoice = voiceAvailable && channels.includes("VOICE");
+    const showManual = channels.includes("MANUAL");
     return (
       <div className="space-y-4">
-        <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
+        {showText && (
+          <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
           <h2 className="font-semibold">Say or type the order</h2>
           <p className="text-sm text-muted-foreground">
             For example: “Sharma Traders, 5 carton rose, 3 carton birthday, by 5 Nov”. {aiAvailable ? "The AI assistant reads it." : "Simple matching reads it (no AI key set)."}
           </p>
           <Textarea aria-label="The order" rows={4} value={text} onChange={(e) => { setText(e.target.value); setFromVoice(false); }} />
           <div className="flex flex-wrap gap-2">
-            {voiceAvailable && <VoiceRecorder onText={(t) => { setText(t); setFromVoice(true); }} />}
+            {showVoice && <VoiceRecorder onText={(t) => { setText(t); setFromVoice(true); }} />}
             <Button className="h-12" disabled={busy || text.trim().length < 3} onClick={check}>{busy ? "Checking…" : "Check"}</Button>
-            <Button variant="outline" className="h-12" onClick={() => setDraft({ channel: "MANUAL", extractor: null, model: null, sourceText: "", notes: [], customerId: initialCustomerId, dueDate: "", lines: [blankLine()] })}>
-              Fill in by hand
-            </Button>
+            {showManual && (
+              <Button variant="outline" className="h-12" onClick={() => setDraft({ channel: "MANUAL", extractor: null, model: null, sourceText: "", notes: [], customerId: initialCustomerId, dueDate: "", lines: [blankLine()] })}>
+                Fill in by hand
+              </Button>
+            )}
           </div>
         </section>
+        )}
 
-        <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
+        {showPhotos && (
+          <section className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
           <h2 className="font-semibold">Upload a photo of the order</h2>
           {visionAvailable ? (
             <>
@@ -129,6 +142,7 @@ export function OrderForm({ customers, catalogue, voiceAvailable, aiAvailable, v
             <p className="text-sm text-muted-foreground">Photo reading is not switched on yet. It needs an AI model that can see pictures; see <b>docs/keys.md</b> (LLM_VISION_MODEL).</p>
           )}
         </section>
+        )}
       </div>
     );
   }
