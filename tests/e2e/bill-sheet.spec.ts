@@ -94,6 +94,16 @@ test("owner sets how many pieces make one carton, right on the stock list", asyn
   await row.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Saved: 1 carton = 12 pcs")).toBeVisible();
   await expect(row).toContainText("4 cartons + 2 pcs (50 pcs)");
+
+  // Stock can be corrected in cartons too: take out 1 carton (12 pieces).
+  await row.getByRole("button", { name: "Correct" }).click();
+  await page.getByRole("button", { name: "Take out of stock" }).click();
+  await page.getByLabel("Cartons to change").fill("1");
+  await expect(page.getByTestId("correction-total")).toContainText("takes out 12 pieces");
+  await page.getByPlaceholder("e.g. broken, miscounted").fill("broken in the godown");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Stock corrected")).toBeVisible();
+  await expect(row).toContainText("3 cartons + 2 pcs (38 pcs)");
 });
 
 test("the sheet fits the screen without sideways scrolling, can be resized, and grows up to 50 rows", async ({ browser }) => {

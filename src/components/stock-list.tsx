@@ -24,7 +24,7 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
   const [mode, setMode] = useState<Mode>(null);
   const [cartons, setCartons] = useState("");
   const [loose, setLoose] = useState("");
-  const [change, setChange] = useState("");
+  const [direction, setDirection] = useState<"add" | "remove">("add");
   const [reason, setReason] = useState("");
   const [key, renewKey] = useIdempotencyKey();
   const [busy, setBusy] = useState(false);
@@ -39,14 +39,16 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
     setBusy(true);
     const pending = mode.kind === "produce"
       ? recordProductionAction({ productId: mode.row.id, quantity: toPieces(cartons, loose, mode.row.qtyPerCarton), idempotencyKey: key })
-      : adjustStockAction({ productId: mode.row.id, quantityDelta: change, reason, idempotencyKey: key });
+      : adjustStockAction({ productId: mode.row.id, quantityDelta: correctionPieces, reason, idempotencyKey: key });
     const ok = await callAction(pending, { success: mode.kind === "produce" ? "Production added" : "Stock corrected" });
     setBusy(false);
     if (ok) {
-      renewKey(); setMode(null); setCartons(""); setLoose(""); setChange(""); setReason(""); router.refresh();
+      renewKey(); setMode(null); setCartons(""); setLoose(""); setDirection("add"); setReason(""); router.refresh();
     }
   }
 
+  // A correction is typed in cartons and/or pieces, as an addition or a removal; stock itself is kept in pieces.
+  const correctionPieces = mode?.kind === "adjust" ? `${direction === "remove" ? "-" : ""}${toPieces(cartons, loose, mode.row.qtyPerCarton)}` : "0";
   const producePieces = mode?.kind === "produce" ? toPieces(cartons, loose, mode.row.qtyPerCarton) : "0";
 
   return (
@@ -91,10 +93,15 @@ export function StockList({ rows, canAdjust }: { rows: Row[]; canAdjust: boolean
               </>
             ) : (
               <>
-                <div className="space-y-1">
-                  <Label>Change in pieces (use minus to reduce, e.g. -3)</Label>
-                  <Input aria-label="Change in pieces" className="h-14 text-2xl" autoFocus value={change} onChange={(e) => setChange(e.target.value)} />
+                <div role="group" aria-label="Add or take out" className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant={direction === "add" ? "default" : "outline"} className="h-12" aria-pressed={direction === "add"} onClick={() => setDirection("add")}>Add to stock</Button>
+                  <Button type="button" variant={direction === "remove" ? "default" : "outline"} className="h-12" aria-pressed={direction === "remove"} onClick={() => setDirection("remove")}>Take out of stock</Button>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1"><Label>Cartons</Label><Input aria-label="Cartons to change" className="h-14 text-2xl" inputMode="decimal" autoFocus value={cartons} onChange={(e) => setCartons(e.target.value)} /></div>
+                  <div className="space-y-1"><Label>Extra pieces</Label><Input aria-label="Pieces to change" className="h-14 text-2xl" inputMode="decimal" value={loose} onChange={(e) => setLoose(e.target.value)} /></div>
+                </div>
+                <p className="text-sm" data-testid="correction-total">1 carton = {(mode?.row.qtyPerCarton ?? 1)} pieces. This {direction === "remove" ? "takes out" : "adds"} <b>{toPieces(cartons, loose, (mode?.row.qtyPerCarton ?? 1))}</b> pieces.</p>
                 <div className="space-y-1"><Label>Reason (required)</Label><Input className="h-11" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. broken, miscounted" /></div>
               </>
             )}
