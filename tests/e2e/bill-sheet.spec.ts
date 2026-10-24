@@ -146,3 +146,59 @@ test("the sheet fits the screen without sideways scrolling, can be resized, and 
   await page.getByRole("button", { name: "Fit to screen" }).click();
   await page.getByRole("button", { name: "Cards" }).click();
 });
+
+test("amounts without and with GST appear as soon as quantity and rate are filled, even before a customer is chosen", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Excel sheet" }).click();
+  const row = page.getByTestId("sheet-row").nth(0);
+  await row.getByLabel("Item").fill("sheet cand");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("2"); // 2 cartons x 6 pieces = 12 pieces
+  await page.keyboard.press("Tab");
+  // The sheet no longer has discount or CGST/SGST/IGST columns, just the two amounts.
+  await expect(page.getByRole("columnheader", { name: "Amount without GST" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Amount with GST" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /Discount|CGST|SGST|IGST/ })).toHaveCount(0);
+
+  const rate = Number((await row.getByLabel("Rate", { exact: true }).getAttribute("placeholder"))!.replace(/,/g, ""));
+  const ex = 12 * rate;
+  await expect(row.getByTestId("sheet-amount-ex")).toHaveText(ex.toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  const gst = Number((await row.getByTestId("sheet-gst-rate").innerText()).replace("%", ""));
+  await expect(row.getByTestId("sheet-line-total")).toHaveText((ex + Math.round(ex * gst) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  await expect(page.getByTestId("sheet-total-ex")).not.toHaveText("");
+
+  // Typing an own rate updates both amounts at once: 12 pieces at 25 = 300 before GST.
+  await row.getByLabel("Rate", { exact: true }).fill("25");
+  await expect(row.getByTestId("sheet-amount-ex")).toHaveText("300.00");
+  await page.getByRole("button", { name: "Cards" }).click();
+});
+
+test("a half-filled bill is kept when you change tab and come back, and cleared when you start a new bill", async ({ page }) => {
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Cards" }).click();
+  await page.getByRole("button", { name: "Choose customer…" }).click();
+  await page.getByPlaceholder("Name, mobile or GSTIN…").fill("E2E");
+  await page.getByRole("option", { name: /E2E Traders/ }).click();
+  await page.getByRole("button", { name: "Choose item…" }).click();
+  await page.getByRole("option", { name: /E2E Sheet Candle/ }).click();
+  await page.getByLabel("Quantity", { exact: true }).fill("7");
+  await page.getByLabel("Rate", { exact: true }).fill("33");
+  await page.waitForTimeout(700); // saved a moment after the last change
+
+  await page.getByRole("link", { name: "Home" }).click(); // go to another tab...
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page.getByRole("link", { name: "New bill", exact: true }).first().click(); // ...and come back
+  await expect(page.getByTestId("draft-restored")).toBeVisible();
+  await expect(page.getByRole("button", { name: "E2E Traders" })).toBeVisible();
+  await expect(page.getByLabel("Quantity", { exact: true })).toHaveValue("7");
+  await expect(page.getByLabel("Rate", { exact: true })).toHaveValue("33");
+
+  await page.getByRole("button", { name: "Start a new bill" }).click();
+  await expect(page.getByTestId("draft-restored")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose customer…" })).toBeVisible();
+});

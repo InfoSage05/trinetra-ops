@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -19,12 +19,14 @@ import { GstSummary } from "@/components/gst-summary";
 import { CHARGE_FIELDS, QTY_UNITS, blankLine, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
+import { estimateLine } from "@/components/bill-amounts";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { useBillLayout } from "@/lib/client/use-bill-layout";
+import { DRAFT_KEY, parseDraft, type BillDraft } from "@/lib/client/bill-draft";
 import { useSheetPrefs } from "@/lib/client/use-sheet-prefs";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
 import { D, amountInWords, formatINR, formatQuantity } from "@/lib/money";
@@ -41,16 +43,31 @@ type Props = {
   order?: { id: string; lines: { productId: string; pieces: string }[] };
 };
 
-export function BillForm({ products, businessStateCode, initialCustomer = null, initialProductId, order }: Props) {
+const noSubscribe = () => () => {};
+
+/**
+ * The bill being typed is kept in this browser as you go, so changing to another tab or reloading the page does not lose it.
+ * It is brought back when you return, and removed when the bill is saved or you press "Start a new bill".
+ */
+export function BillForm(props: Props) {
+  // null while the server renders; the saved text (or "") once the browser has taken over, which restarts the form with it.
+  const raw = useSyncExternalStore(noSubscribe, () => window.localStorage.getItem(DRAFT_KEY) ?? "", () => null);
+  const prefilled = Boolean(props.order || props.initialCustomer || props.initialProductId); // a link that fills the form wins over a saved draft
+  const saved = prefilled || raw === null ? null : parseDraft(raw);
+  return <BillFormInner key={raw === null ? "server" : "browser"} {...props} saved={saved} persist={!prefilled} />;
+}
+
+function BillFormInner({ products, businessStateCode, initialCustomer = null, initialProductId, order, saved, persist }: Props & { saved: BillDraft | null; persist: boolean }) {
   const router = useRouter();
   const [key, renewKey] = useIdempotencyKey();
-  const [customer, setCustomer] = useState<SavedCustomer | null>(initialCustomer);
-  const [placeOfSupply, setPlaceOfSupply] = useState(initialCustomer?.stateCode ?? businessStateCode);
+  const [customer, setCustomer] = useState<SavedCustomer | null>(saved?.customer ?? initialCustomer);
+  const [placeOfSupply, setPlaceOfSupply] = useState(saved?.placeOfSupply ?? initialCustomer?.stateCode ?? businessStateCode);
   // Which of the three rates this bill uses; it starts from the customer's own rate type and can be changed.
-  const [rateTier, setRateTier] = useState<RateTier>(initialCustomer?.rateTier ?? "B");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [notes, setNotes] = useState("");
+  const [rateTier, setRateTier] = useState<RateTier>(saved?.rateTier ?? initialCustomer?.rateTier ?? "B");
+  const [deliveryAddress, setDeliveryAddress] = useState(saved?.deliveryAddress ?? "");
+  const [notes, setNotes] = useState(saved?.notes ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
+    if (saved && saved.lines.length > 0) return saved.lines.map((l) => ({ ...blankLine(), ...l })); // new row ids, same contents
     const fromOrder = (order?.lines ?? []).flatMap((l) => {
       const product = products.find((p) => p.id === l.productId);
       if (!product) return [];
@@ -58,16 +75,16 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     });
     return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
   });
-  const [charges, setCharges] = useState<Charges>({ CARTON: "", CRATE: "", FREIGHT: "" });
+  const [charges, setCharges] = useState<Charges>(saved?.charges ?? { CARTON: "", CRATE: "", FREIGHT: "" });
   const [layout, setLayout] = useBillLayout();
   const [sheetPrefs, setSheetPrefs] = useSheetPrefs();
   // The full-width sheet needs the whole row, so the side stock panel gives way to the one-line stock bar.
   const sideStock = layout === "cards" || !sheetPrefs.wide;
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [fetched, setFetched] = useState<{ json: string; data: Plain<BillPreview> | null; error: string | null } | null>(null);
-  const [payMode, setPayMode] = useState<PayMode>("FULL");
-  const [paidAmount, setPaidAmount] = useState("");
-  const [method, setMethod] = useState("CASH");
+  const [payMode, setPayMode] = useState<PayMode>(saved?.payMode ?? "FULL");
+  const [paidAmount, setPaidAmount] = useState(saved?.paidAmount ?? "");
+  const [method, setMethod] = useState(saved?.method ?? "CASH");
   const [confirmText, setConfirmText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +107,21 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     charges: CHARGE_FIELDS.filter((c) => charges[c.kind].trim() !== "" && Number(charges[c.kind]) !== 0).map((c) => ({ kind: c.kind, amount: charges[c.kind].trim() })),
   };
   const draftJson = JSON.stringify(draft);
+
+  // Keep the unsaved bill in this browser a moment after every change.
+  useEffect(() => {
+    if (!persist) return;
+    const timer = setTimeout(() => {
+      const empty = !customer && !deliveryAddress && !notes && !lines.some((l) => l.productId) && !Object.values(charges).some((c) => c.trim() !== "");
+      if (empty) { window.localStorage.removeItem(DRAFT_KEY); return; }
+      const draftToSave: BillDraft = {
+        savedAt: Date.now(), customer, placeOfSupply, rateTier, deliveryAddress, notes, charges, payMode, paidAmount, method,
+        lines: lines.map(({ rowId, ...rest }) => { void rowId; return rest; }),
+      };
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draftToSave));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [persist, customer, placeOfSupply, rateTier, deliveryAddress, notes, lines, charges, payMode, paidAmount, method]);
 
   // Live, authoritative totals and stock from the server (debounced).
   // Only trust a preview computed for exactly the current draft; an older one may show stale totals.
@@ -130,11 +162,17 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
   async function save(confirmShortfall: boolean) {
     if (!customer) return toast.error("Choose a customer first.");
     if (filledLines.length === 0) return toast.error("Add at least one item with its cartons.");
-    if (!preview) return toast.error(previewError ?? "Please wait for the total to update.");
-    if (preview.hasShortfall && !confirmShortfall) {
-      return setConfirmText(preview.lines.filter((l) => l.shortfallQuantity).map((l) => `${l.productName}: short by ${formatQuantity(l.shortfallQuantity!)}`).join("\n"));
+    // If Save is pressed before the total has arrived (a quick typist), ask the server for it now instead of making them wait.
+    let priced = preview;
+    if (!priced) {
+      const fresh = await previewBillAction(draft);
+      if (!fresh.ok) return toast.error(fresh.error);
+      priced = fresh.data;
     }
-    const amount = payMode === "FULL" ? preview.grandTotal : payMode === "PART" ? paidAmount : "";
+    if (priced.hasShortfall && !confirmShortfall) {
+      return setConfirmText(priced.lines.filter((l) => l.shortfallQuantity).map((l) => `${l.productName}: short by ${formatQuantity(l.shortfallQuantity!)}`).join("\n"));
+    }
+    const amount = payMode === "FULL" ? priced.grandTotal : payMode === "PART" ? paidAmount : "";
     setSaving(true);
     let result;
     try {
@@ -151,6 +189,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     setSaving(false);
     if (result.ok) {
       renewKey();
+      window.localStorage.removeItem(DRAFT_KEY); // saved, so the draft is no longer needed
       toast.success(`Bill ${result.data.invoiceNumber} saved`);
       router.push(`/bills/${result.data.id}`);
     } else if (result.code === "SHORTFALL_NOT_CONFIRMED") {
@@ -164,6 +203,12 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
     <div className="pb-44 lg:pb-28">
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="mr-auto">New bill</h1>
+        {saved && (
+          <p className="flex items-center gap-2 rounded-lg bg-info/10 px-3 py-1.5 text-sm text-info" data-testid="draft-restored">
+            Your unsaved bill from earlier is back.
+            <button type="button" className="font-semibold underline" onClick={() => { window.localStorage.removeItem(DRAFT_KEY); window.location.reload(); }}>Start a new bill</button>
+          </p>
+        )}
         <div role="group" aria-label="Bill layout" className="inline-flex rounded-lg bg-muted p-1 shadow-[inset_0_1px_2px_rgb(64_38_16/0.06)]">
           <button type="button" aria-pressed={layout === "cards"} onClick={() => setLayout("cards")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${layout === "cards" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Cards</button>
           <button type="button" aria-pressed={layout === "sheet"} onClick={() => setLayout("sheet")} className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${layout === "sheet" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Excel sheet</button>
@@ -240,9 +285,9 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div className="space-y-1"><Label>Rate</Label><RateChoicePicker product={product} line={line} billTier={rateTier} onChange={(patch) => update(line.rowId, patch)} /></div>
-                        <div className="space-y-1"><Label>Discount ₹</Label><Input aria-label="Discount" className="h-12" inputMode="decimal" placeholder="0" value={line.discountAmount} onChange={(e) => update(line.rowId, { discountAmount: e.target.value })} /></div>
                         <div className="space-y-1"><Label>GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3">{formatQuantity(product.gstRate)}%</p></div>
-                        <div className="space-y-1"><Label>Total amount</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{pl ? formatINR(pl.lineTotal) : "-"}</p></div>
+                        <div className="space-y-1"><Label>Amount without GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-medium" data-testid="line-ex">{(pl ? { ex: D(pl.taxableValue) } : estimateLine(product, line, rateTier)) ? formatINR((pl ? { ex: D(pl.taxableValue) } : estimateLine(product, line, rateTier))!.ex) : "-"}</p></div>
+                        <div className="space-y-1"><Label>Amount with GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{(pl ? { inc: D(pl.lineTotal) } : estimateLine(product, line, rateTier)) ? formatINR((pl ? { inc: D(pl.lineTotal) } : estimateLine(product, line, rateTier))!.inc) : "-"}</p></div>
                       </div>
                       {pl?.shortfallQuantity && <p className="text-sm text-destructive">Short by {formatQuantity(pl.shortfallQuantity)} {product.unit}. Check the stock box.</p>}
                     </>
