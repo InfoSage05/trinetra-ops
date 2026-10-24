@@ -78,3 +78,15 @@ test("owner can delete an item added by mistake, but not one that has stock", as
   await expect(page.getByText(/cannot be deleted because it is already used/)).toBeVisible();
   await expect(page.getByText("E2E Used Item").first()).toBeVisible(); // still there
 });
+
+test("the Edit product box can be scrolled and saved even on a short screen", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 520 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/products");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Edit" }).first().click();
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  await save.scrollIntoViewIfNeeded(); // the box scrolls inside the screen instead of running off it
+  await save.click();
+  await expect(page.getByText("Product saved")).toBeVisible();
+});

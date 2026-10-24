@@ -175,7 +175,7 @@ export function ProductsManager({ products, categories }: { products: Product[];
       </AlertDialog>
 
       <Dialog open={editing !== null} onOpenChange={(open) => { if (!open) setEditing(null); }}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>{editing?.id ? "Edit product" : "Add product"}</DialogTitle></DialogHeader>
           {editing && (
             <div className="grid gap-3 sm:grid-cols-2">
