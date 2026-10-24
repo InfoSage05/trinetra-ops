@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { transcribeAction } from "@/actions/assistant";
 import { callAction } from "@/lib/client/call-action";
 
-/** Press, speak, press again. The words land in the text box so the person can read and fix them first. */
-export function VoiceRecorder({ onText }: { onText: (text: string) => void }) {
+/**
+ * Press, speak, press again. The words land in the text box so the person can read and fix them first.
+ * `iconOnly` renders a single mic button (for tight rows like the Help chat); the default is the labelled one.
+ */
+export function VoiceRecorder({ onText, iconOnly = false }: { onText: (text: string) => void; iconOnly?: boolean }) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -43,6 +46,22 @@ export function VoiceRecorder({ onText }: { onText: (text: string) => void }) {
   function stop() {
     recorder.current?.stop();
     setRecording(false);
+  }
+
+  if (iconOnly) {
+    return (
+      <Button
+        type="button"
+        variant={recording ? "destructive" : "outline"}
+        className="h-12 w-12 shrink-0 px-0"
+        disabled={busy}
+        aria-label={busy ? "Listening" : "Speak your question"}
+        title={busy ? "Listening…" : "Speak your question"}
+        onClick={recording ? stop : start}
+      >
+        {busy ? "…" : <span aria-hidden className="text-lg leading-none">🎤</span>}
+      </Button>
+    );
   }
 
   return (

@@ -60,7 +60,7 @@ STT_API_KEY=<same key>
 STT_MODEL=whisper-large-v3-turbo
 ```
 
-When these are set, a **Speak** button appears next to the text box on Smart entry and New order. The recording is sent to that host to be turned into text, and the text lands in the box for you to read and correct before anything is saved. Without them the button is simply not shown.
+When these are set, a **Speak** / 🎤 button appears next to the text box on Smart entry, New order and in the **Help** chat (on every page). The recording is sent to that host to be turned into text, and the text lands in the box for you to read and correct before anything is saved. Without them the microphone button is simply not shown.
 
 ## C. Nice to have
 
