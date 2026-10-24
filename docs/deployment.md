@@ -14,7 +14,7 @@ npm run test:e2e     # browser tests on a phone-sized viewport
 ## Recommended production: Vercel Pro + Neon Postgres (~US$20/month, near-zero upkeep)
 Vercel's free Hobby plan is for **non-commercial use only**, so a business must use Pro. Neon's free tier is enough for this scale (check current limits on neon.tech).
 
-1. **Neon:** create a project with Postgres 17 in the region closest to India. Copy two connection strings:
+1. **Neon:** create a project with Postgres 18 (17 also works; the backup tool in `.github/workflows/backup.yml` is version 18, and a backup tool can read the same or an older server, never a newer one) in the region closest to India. Copy two connection strings:
    - **Pooled** (host contains `-pooler`): this becomes `DATABASE_URL`.
    - **Direct**: this becomes `DIRECT_DATABASE_URL`, used by migrations, and also `BACKUP_DATABASE_URL` in GitHub secrets.
 2. **Vercel:** "Add New Project", import the GitHub repo, and set the Framework to Next.js.

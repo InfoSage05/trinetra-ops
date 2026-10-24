@@ -9,10 +9,10 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Dump with pg_dump 17 (matches the server version)
+      - name: Dump with pg_dump 18 (must be the same version as, or newer than, the server)
         env:
           DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
-        run: docker run --rm -e DATABASE_URL postgres:17 sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner' > backup.dump
+        run: docker run --rm -e DATABASE_URL postgres:18 sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner' > backup.dump
       - name: Encrypt (AES-256, passphrase from secrets)
         env:
           PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
