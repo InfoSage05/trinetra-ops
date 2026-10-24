@@ -46,7 +46,8 @@ function RateRow({ item }: { item: Item }) {
     if (ok) router.refresh();
   }
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && anyChange && !busy) void save(); };
-  const qpc = item.qtyPerCarton;
+  const PATTY = 30; // 1 patty = 30 pieces
+  const qpc = PATTY;
   const cartonOf = (piece: string) => {
     const n = Number(piece);
     return piece.trim() === "" || !Number.isFinite(n) ? "" : (n * qpc).toFixed(2);
@@ -65,14 +66,14 @@ function RateRow({ item }: { item: Item }) {
       <div className="rounded-lg border bg-muted/30 p-2" data-testid={`rate-box-${tier}`}>
         <p className="mb-1 text-xs font-semibold text-muted-foreground">{label}</p>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Carton ₹</span>
-          <Input aria-label={`Per carton ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
+          <span className="text-xs text-muted-foreground">Patty ₹</span>
+          <Input aria-label={`Per patty ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
             value={typed ?? roundedCarton} onChange={(e) => setCarton(tier, e.target.value)} onKeyDown={onEnter} />
           <span className="text-xs text-muted-foreground">Piece ₹</span>
           <Input aria-label={`Rate ${tier} of ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
             value={rates[tier]} onChange={(e) => setPiece(tier, e.target.value)} onKeyDown={onEnter} />
         </div>
-        {off && <p className="mt-1 text-xs text-amber-700">Saved per piece as ₹{rates[tier]}, so a carton works out to ₹{roundedCarton}.</p>}
+        {off && <p className="mt-1 text-xs text-amber-700">Saved per piece as ₹{rates[tier]}, so a patty works out to ₹{roundedCarton}.</p>}
       </div>
     );
   };
@@ -82,7 +83,7 @@ function RateRow({ item }: { item: Item }) {
       {item.size && <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="size-badge">Size {item.size}</span>}
       <Input aria-label={`Name of ${item.name}`} className="h-11 min-w-0 flex-1 basis-56" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
       <div className="flex w-full flex-wrap gap-2">
-        {rateBox("A", `Rate A · big wholesalers (1 carton = ${qpc})`, "as B")}
+        {rateBox("A", `Rate A · big wholesalers (1 patty = 30 pcs)`, "as B")}
         {rateBox("B", "Rate B · normal wholesalers", "not set")}
         {rateBox("C", "Rate C · direct vendors", "as B")}
       </div>

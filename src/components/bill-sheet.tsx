@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
-import { CHARGE_FIELDS, QTY_UNITS, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, cartonPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import type { RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
 import { estimateCharge, estimateLine, type LineMoney } from "@/components/bill-amounts";
@@ -35,7 +35,7 @@ type Props = {
 
 // Standard column widths in pixels (before zooming). The owner can drag any of them wider or narrower, like in Excel.
 const DEFAULT_COLS = [4, 19, 5, 6, 5, 8, 8, 7, 12, 5, 10, 10, 3].map((p) => Math.round(p * 9.8));
-const COL = { item: 0, quantity: 1, unit: 2, rate: 3 } as const;
+const COL = { item: 0, cartons: 1, perCarton: 2, quantity: 3, unit: 4, rate: 5 } as const;
 const th = "border border-neutral-400 bg-neutral-100 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight";
 const td = "border border-neutral-300 px-1 py-0 align-middle";
 const num = `${td} text-right tabular-nums`;
@@ -185,7 +185,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
   const sumOf = (pick: (m: LineMoney) => ReturnType<typeof D>) =>
     [...rowMoney, ...chargeMoney.values()].reduce((s2, m) => (m ? s2.plus(pick(m)) : s2), D(0));
   const itemLines = preview?.lines ?? [];
-  const totalCartons = lines.reduce((s2, l) => { const p = products.find((x) => x.id === l.productId); return p ? s2.plus(D(linePieces(l, p)).div(p.qtyPerCarton)) : s2; }, D(0));
+  const totalCartons = lines.reduce((s2, l) => { const p = products.find((x) => x.id === l.productId); return p && cartonPieces(l, p).greaterThan(0) ? s2.plus(D(linePieces(l, p)).div(cartonPieces(l, p))) : s2; }, D(0));
   const totalQty = lines.reduce((s2, l) => { const p = products.find((x) => x.id === l.productId); return p ? s2.plus(D(linePieces(l, p))) : s2; }, D(0));
   const anyAmount = rowMoney.some((m) => m !== null);
   const grandTotal = preview ? D(preview.grandTotal) : sumOf((m) => m.inc);
@@ -228,7 +228,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "Qty per carton", "Quantity", "Unit", "Total qty", "Rate", "GST %", "Amount without GST", "Amount with GST", ""].map((h, i) => (
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Patty per carton", "Quantity", "Unit", "Total qty", "Rate", "GST %", "Amount without GST", "Amount with GST", ""].map((h, i) => (
               <th key={i} className={`${th} relative`}>
                 {h}
                 {i < cols.length - 1 && (
@@ -261,8 +261,15 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                   />
                 </td>
                 <td className={`${td} text-center`}>{pl?.hsnCode ?? ""}</td>
-                <td className={num} data-testid="sheet-cartons">{product && D(pieces).greaterThan(0) ? formatQuantity(D(pieces).div(product.qtyPerCarton).toDecimalPlaces(2)) : ""}</td>
-                <td className={`${num} text-muted-foreground`} data-testid="sheet-qty-per-carton">{product?.qtyPerCarton ?? ""}</td>
+                <td className={td}>
+                  <input data-cell={cell("cartons")} aria-label="Cartons" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed" data-testid="sheet-cartons"
+                    value={line?.cartons ?? ""} onChange={(e) => onEdit(i, { cartons: e.target.value })} onKeyDown={keys(i, COL.cartons)} onFocus={(e) => e.currentTarget.select()} />
+                </td>
+                <td className={td}>
+                  <input data-cell={cell("perCarton")} aria-label="Patty per carton" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed" data-testid="sheet-qty-per-carton"
+                    placeholder={product ? formatQuantity(D(product.qtyPerCarton).div(30).toDecimalPlaces(4)) : ""}
+                    value={line?.pattyPerCarton ?? ""} onChange={(e) => onEdit(i, { pattyPerCarton: e.target.value })} onKeyDown={keys(i, COL.perCarton)} onFocus={(e) => e.currentTarget.select()} />
+                </td>
                 <td className={td}>
                   <input data-cell={cell("quantity")} aria-label="Quantity" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
                     value={line?.qty ?? ""} onChange={(e) => onEdit(i, { qty: e.target.value })} onKeyDown={keys(i, COL.quantity)} onFocus={(e) => e.currentTarget.select()} />

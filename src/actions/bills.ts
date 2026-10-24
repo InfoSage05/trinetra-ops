@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { recordPayment } from "@/domain/payments";
 import { recordReturn } from "@/domain/credit-notes";
 import { retryIrpSubmission } from "@/domain/irp";
+import { deleteBill } from "@/domain/bill-deletion";
 
 function refresh(billId?: unknown) {
   if (typeof billId === "string") revalidatePath(`/bills/${billId}`);
@@ -21,4 +22,12 @@ export async function recordReturnAction(input: { billId: string } & Record<stri
 
 export async function retryIrpAction(input: { submissionId: string; billId: string }) {
   return runAction(async () => { const r = await retryIrpSubmission(await getSession(), input); refresh(input.billId); return r; });
+}
+
+export async function deleteBillAction(input: unknown) {
+  return runAction(async () => {
+    const result = await deleteBill(await getSession(), input);
+    for (const p of ["/bills", "/dashboard", "/reports", "/inventory", "/orders"]) revalidatePath(p);
+    return result;
+  });
 }

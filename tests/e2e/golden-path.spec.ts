@@ -22,7 +22,6 @@ test("owner bills 1 carton + 3 pieces with freight; stock panel shows the item; 
   await page.getByRole("option", { name: /E2E Lavender Candle/ }).click();
   // The stock panel appears beside the form as soon as an item is chosen.
   await expect(page.getByTestId("stock-bar")).toContainText("2 cartons (20 pcs)");
-  await expect(page.getByTestId("qty-per-carton")).toHaveText("10");
   await page.getByLabel("Unit", { exact: true }).selectOption("piece"); // 13 loose pieces
   await page.getByLabel("Quantity", { exact: true }).fill("13");
   await expect(page.getByTestId("total-qty")).toContainText("13");

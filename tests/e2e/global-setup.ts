@@ -29,8 +29,8 @@ export default async function globalSetup() {
   await f.makeProduct({ sku: "E2E-4", name: "E2E Orange Candle", qtyPerCarton: 6 });
   const mint = await f.makeProduct({ sku: "E2E-5", name: "E2E Mint Candle", qtyPerCarton: 8 });
   await f.addStock(mint.id, "8.00");
-  const sheet = await f.makeProduct({ sku: null, name: "E2E Sheet Candle", qtyPerCarton: 6 }); // an item with no code
-  await f.addStock(sheet.id, "100.00");
+  const sheet = await f.makeProduct({ sku: null, name: "E2E Sheet Candle", qtyPerCarton: 900 }); // an item with no code; 1 carton = 30 patty = 900 pieces
+  await f.addStock(sheet.id, "20000.00");
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Rename Me", qtyPerCarton: 1 })).id, "5.00");
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Carton Size Me" })).id, "50.00");
   await f.addStock((await f.makeProduct({ sku: null, name: "E2E Rate Me", unitPrice: "150.00" })).id, "5.00");

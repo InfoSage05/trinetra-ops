@@ -1,7 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { downloadBillPdf } from "@/lib/client/download-bill";
+import { DeleteBillButton } from "@/components/delete-bill-button";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,6 +82,8 @@ export function BillActions({ view }: { view: Plain<InvoiceView> }) {
         <a className={linkButton()} href={`/print/bills/${view.id}?format=a4`} target="_blank" rel="noreferrer">Print A4</a>
         <a className={linkButton()} href={`/print/bills/${view.id}?format=thermal`} target="_blank" rel="noreferrer">Print receipt</a>
         <a className={linkButton()} href={`/api/bills/${view.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>
+        <DeleteBillButton billId={view.id} invoiceNumber={view.invoiceNumber} customerName={view.customer.name} goToBills />
+        <Button variant="outline" onClick={async () => toast((await downloadBillPdf(view.id, view.invoiceNumber)) ? "PDF saved on this device (see your Downloads)." : "Could not save the PDF. Try the PDF button.")}>Save PDF to this device</Button>
         <a className={linkButton()} href={share} target="_blank" rel="noreferrer">WhatsApp</a>
         {view.irp && (view.irp.status === "FAILED" || view.irp.status === "REJECTED") && (
           <Button variant="destructive" onClick={async () => { if (await callAction(retryIrpAction({ submissionId: view.irp!.submissionId, billId: view.id }), { success: "Queued for retry" })) router.refresh(); }}>Retry e-invoice</Button>

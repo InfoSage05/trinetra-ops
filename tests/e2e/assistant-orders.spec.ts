@@ -60,7 +60,7 @@ test("owner enters an order by text, bills it, and the order moves to delivered"
   await page.getByRole("link", { name: /Order Traders/ }).first().click();
   await page.getByRole("link", { name: "Create bill from this order" }).click();
   await expect(page.getByTestId("purchaser-details")).toBeVisible();
-  await expect(page.getByLabel("Quantity", { exact: true })).toHaveValue("3");
+  await expect(page.getByLabel("Quantity", { exact: true })).toHaveValue("24"); // 24 pieces (3 cartons of 8)
   await expect(page.getByText("Grand total")).toBeVisible();
   await page.getByRole("button", { name: "On credit" }).click();
   await page.getByRole("button", { name: /Save bill/ }).click();

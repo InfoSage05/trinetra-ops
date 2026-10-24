@@ -148,12 +148,12 @@ test("rates show a carton rate and a piece rate side by side, and either can be 
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Rates and names" }).click();
   const piece = Number(await page.getByLabel("Rate B of E2E Sheet Candle", { exact: true }).inputValue());
-  await expect(page.getByLabel("Per carton B for E2E Sheet Candle")).toHaveValue((piece * 6).toFixed(2)); // 6 pieces per carton
-  await page.getByLabel("Per carton B for E2E Sheet Candle").fill("600");
-  await expect(page.getByLabel("Rate B of E2E Sheet Candle", { exact: true })).toHaveValue("100.00"); // 600 / 6
-  await page.locator("li", { has: page.getByLabel("Per carton B for E2E Sheet Candle") }).getByRole("button", { name: "Save" }).click();
+  await expect(page.getByLabel("Per patty B for E2E Sheet Candle")).toHaveValue((piece * 30).toFixed(2)); // 30 pieces per patty
+  await page.getByLabel("Per patty B for E2E Sheet Candle").fill("600");
+  await expect(page.getByLabel("Rate B of E2E Sheet Candle", { exact: true })).toHaveValue("20.00"); // 600 / 30
+  await page.locator("li", { has: page.getByLabel("Per patty B for E2E Sheet Candle") }).getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Rates and names" }).click();
-  await expect(page.getByLabel("Per carton B for E2E Sheet Candle")).toHaveValue("600.00");
+  await expect(page.getByLabel("Per patty B for E2E Sheet Candle")).toHaveValue("600.00");
 });

@@ -16,7 +16,7 @@ import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
 import { GstSummary } from "@/components/gst-summary";
-import { CHARGE_FIELDS, QTY_UNITS, blankLine, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, applyLineEdit, blankLine, cartonPieces, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
 import { estimateLine } from "@/components/bill-amounts";
@@ -26,6 +26,8 @@ import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { useIdempotencyKey } from "@/lib/client/use-idempotency-key";
 import { useBillLayout } from "@/lib/client/use-bill-layout";
+import { downloadBillPdf } from "@/lib/client/download-bill";
+import { savePdfCopyEnabled, useSavePdfCopy } from "@/lib/client/use-save-copy";
 import { DRAFT_KEY, parseDraft, type BillDraft } from "@/lib/client/bill-draft";
 import { useSheetPrefs } from "@/lib/client/use-sheet-prefs";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
@@ -71,12 +73,13 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
     const fromOrder = (order?.lines ?? []).flatMap((l) => {
       const product = products.find((p) => p.id === l.productId);
       if (!product) return [];
-      return [{ ...blankLine(product.id), ...fromPieces(l.pieces, product.qtyPerCarton) }];
+      return [{ ...blankLine(product.id), ...fromPieces(l.pieces, product) }];
     });
     return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
   });
   const [charges, setCharges] = useState<Charges>(saved?.charges ?? { CARTON: "", CRATE: "", FREIGHT: "" });
   const [layout, setLayout] = useBillLayout();
+  const [savePdfCopy, setSavePdfCopy] = useSavePdfCopy();
   const [sheetPrefs, setSheetPrefs] = useSheetPrefs();
   // The full-width sheet needs the whole row, so the side stock panel gives way to the one-line stock bar.
   const sideStock = layout === "cards" || !sheetPrefs.wide;
@@ -100,7 +103,8 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
     ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: filledLines.map((l) => ({
       productId: l.productId,
-      quantity: pieceCount(l), // whatever unit it was typed in (cartons, dozens, pieces), the bill is worked out in pieces
+      quantity: pieceCount(l), // whatever it was typed in (cartons, patty, dozens, pieces), the bill is worked out in pieces
+      ...(l.pattyPerCarton.trim() ? { qtyPerCarton: cartonPieces(l, productOf(l)).toString() } : {}), // this line's own carton size
       ...(l.unitPrice.trim() ? { unitPrice: l.unitPrice.trim() } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
@@ -138,14 +142,15 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
     return () => clearTimeout(timer);
   }, [draftJson]);
 
-  const update = (rowId: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.rowId === rowId ? { ...l, ...patch } : l)));
+  const productFor = (line: Line, patch: Partial<Line>) => products.find((p) => p.id === (patch.productId ?? line.productId));
+  const update = (rowId: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.rowId === rowId ? applyLineEdit(l, patch, productFor(l, patch)) : l)));
   // The sheet addresses rows by position; a row that does not exist yet is created when it is first typed in.
   const editAt = (index: number, patch: Partial<Line>) => {
     if (index >= MAX_BILL_ITEMS) return toast.error(`A bill can have at most ${MAX_BILL_ITEMS} items. Make a second bill for the rest.`);
     setLines((ls) => {
       const next = [...ls];
       while (next.length <= index) next.push(blankLine());
-      next[index] = { ...next[index], ...patch };
+      next[index] = applyLineEdit(next[index], patch, productFor(next[index], patch));
       return next;
     });
   };
@@ -191,6 +196,12 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
       renewKey();
       window.localStorage.removeItem(DRAFT_KEY); // saved, so the draft is no longer needed
       toast.success(`Bill ${result.data.invoiceNumber} saved`);
+      // Keep a PDF copy on this device too, if that is switched on.
+      // It happens in the background, so the bill page opens straight away.
+      if (savePdfCopyEnabled()) {
+        void downloadBillPdf(result.data.id, result.data.invoiceNumber).then((stored) =>
+          toast(stored ? "A PDF copy was saved on this device (see your Downloads)." : "Could not save the PDF copy here. You can download it from the bill."));
+      }
       router.push(`/bills/${result.data.id}`);
     } else if (result.code === "SHORTFALL_NOT_CONFIRMED") {
       setConfirmText(result.error); // stock changed since the preview
@@ -272,7 +283,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                   <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, rateChoice: "bill", unitPrice: "" }); setActiveIndex(index); }} />
                   {product && (
                     <>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         <div className="space-y-1"><Label>Quantity</Label><Input aria-label="Quantity" className="h-12 text-lg" inputMode="decimal" value={line.qty} onChange={(e) => update(line.rowId, { qty: e.target.value })} /></div>
                         <div className="space-y-1">
                           <Label>Unit</Label>
@@ -280,7 +291,8 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                             {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                           </select>
                         </div>
-                        <div className="space-y-1"><Label>Qty per carton</Label><p className="flex h-12 items-center rounded-md bg-muted px-3" data-testid="qty-per-carton">{product.qtyPerCarton}</p></div>
+                        <div className="space-y-1"><Label>No of cartons</Label><Input aria-label="Cartons" className="h-12 text-lg" inputMode="decimal" value={line.cartons} onChange={(e) => update(line.rowId, { cartons: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Patty in 1 carton</Label><Input aria-label="Patty per carton" className="h-12 text-lg" inputMode="decimal" placeholder={formatQuantity(D(product.qtyPerCarton).div(30).toDecimalPlaces(4))} value={line.pattyPerCarton} onChange={(e) => update(line.rowId, { pattyPerCarton: e.target.value })} /></div>
                         <div className="space-y-1"><Label>Total qty</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="total-qty">{formatQuantity(pieces)} {product.unit}</p></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -338,6 +350,10 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
           )}
 
           <Card><CardContent className="space-y-3 pt-6">
+            <label className="flex items-center gap-2 rounded-lg bg-muted/60 p-2.5 text-sm">
+              <input type="checkbox" checked={savePdfCopy} onChange={(e) => setSavePdfCopy(e.target.checked)} />
+              When the bill is saved, also keep a PDF copy on this device (in the Downloads folder)
+            </label>
             <Label>Payment</Label>
             <div className="grid grid-cols-3 gap-2">
               {([["FULL", "Paid fully"], ["PART", "Part paid"], ["CREDIT", "On credit"]] as const).map(([mode, label]) => (

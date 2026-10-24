@@ -10,7 +10,7 @@ import { MAX_BILL_ITEMS } from "@/lib/limits";
 import { RATE_TIERS, rateFor, type RateTier } from "@/lib/rates";
 import { financialYearOf } from "@/lib/time";
 import {
-  entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveMoney, quantity, stateCode,
+  entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveInt, positiveMoney, quantity, stateCode,
 } from "@/lib/validation";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { computeLine, computeTotals, isInterState, taxOnTaxableValue, type DocumentTotals, type LineAmounts, type TaxSplit } from "@/domain/tax";
@@ -39,6 +39,8 @@ export const billLineSchema = z
     unitPrice: money.optional(),
     /** Use this one rate of the item (A, B or C) for just this line, instead of the bill's rate type. */
     rateTier: z.enum(RATE_TIERS).optional(),
+    /** Pieces in one carton for just this line (the carton size can differ from bill to bill). */
+    qtyPerCarton: positiveInt.optional(),
     discountAmount: money.optional(),
   })
   .superRefine((line, ctx) => {
@@ -111,7 +113,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
     if (!product) throw new NotFoundError(`Product on line ${index + 1}`);
     if (!product.isActive) throw new DomainError("PRODUCT_INACTIVE", `${product.name} is marked inactive.`);
 
-    const qtyPerCarton = product.qtyPerCarton;
+    const qtyPerCarton = line.qtyPerCarton ?? product.qtyPerCarton;
     const qty = line.quantity !== undefined
       ? D(line.quantity)
       : D(line.cartons ?? 0).times(qtyPerCarton).plus(D(line.loosePieces ?? 0));

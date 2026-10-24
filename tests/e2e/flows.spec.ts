@@ -20,7 +20,8 @@ test("overselling asks for confirmation, then payment and a return work on the b
 
   await page.getByRole("button", { name: "Choose item…" }).click();
   await page.getByRole("option", { name: /E2E Rose Candle/ }).click();
-  await page.getByLabel("Quantity", { exact: true }).fill("2"); // 2 cartons x 4 = 8 pieces, only 5 in stock
+  await page.getByLabel("Unit", { exact: true }).selectOption("piece");
+  await page.getByLabel("Quantity", { exact: true }).fill("8"); // 8 pieces, only 5 in stock
   await expect(page.getByTestId("stock-bar")).toContainText("Short by 3 pcs");
   await expect(page.getByText("Grand total")).toBeVisible(); // the server's total has arrived
 

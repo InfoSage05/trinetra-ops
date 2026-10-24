@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/session";
 import { formatINR } from "@/lib/money";
+import { DeleteBillButton } from "@/components/delete-bill-button";
 import { formatDateIN } from "@/lib/time";
 import { listBillsPage } from "@/domain/reports";
 
@@ -26,12 +27,13 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
       </form>
       <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10">
         {bills.map((b) => (
-          <li key={b.id}>
-            <Link href={`/bills/${b.id}`} className="flex flex-wrap items-center gap-2 p-4 transition-colors hover:bg-amber-500/[0.06]">
+          <li key={b.id} className="flex items-center">
+            <Link href={`/bills/${b.id}`} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 p-4 transition-colors hover:bg-amber-500/[0.06]">
               <div className="mr-auto min-w-0"><p className="font-medium">{b.invoiceNumber} · {b.customerName}</p><p className="text-sm text-muted-foreground">{formatDateIN(b.billDate)}</p></div>
               <div className="ml-auto text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
                 <Badge variant={b.payment.status === "PAID" ? "success" : "destructive"}>{STATUS_LABEL[b.payment.status]}{b.payment.status !== "PAID" ? ` · due ${formatINR(b.payment.amountDue)}` : ""}</Badge></div>
             </Link>
+            <div className="pr-3"><DeleteBillButton billId={b.id} invoiceNumber={b.invoiceNumber} customerName={b.customerName} /></div>
           </li>
         ))}
         {bills.length === 0 && <li className="p-8 text-center text-muted-foreground">No bills found.</li>}

@@ -438,3 +438,19 @@ model ProductRateChange {
   @@index([productId, changedAt])
   @@map("product_rate_changes")
 }
+
+/// A note of every bill that was discarded as a test, so a missing number is always explained.
+model BillDeletion {
+  id            String   @id @default(cuid())
+  invoiceNumber String
+  billDate      DateTime
+  customerName  String
+  grandTotal    Decimal  @db.Decimal(12, 2)
+  hadPayments   Boolean  @default(false)
+  hadReturns    Boolean  @default(false)
+  deletedBy     String
+  deletedAt     DateTime @default(now())
+
+  @@index([deletedAt])
+  @@map("bill_deletions")
+}
