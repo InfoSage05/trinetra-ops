@@ -104,6 +104,7 @@ test("the bill starts at the customer's rate type, and it can be switched betwee
 
   await page.getByRole("button", { name: "Choose item…" }).click();
   await page.getByRole("option", { name: /E2E Tier Candle/ }).click();
+  await page.getByLabel("Unit", { exact: true }).selectOption("piece"); // rates are shown per patty, per dozen or per piece to match
   await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "130");
   await group.getByRole("button", { name: /Rate A/ }).click();
   await expect(page.getByLabel("Rate", { exact: true })).toHaveAttribute("placeholder", "80");

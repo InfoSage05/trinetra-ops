@@ -31,23 +31,23 @@ test("owner makes a bill in the Excel-sheet layout using only the keyboard, and 
   await expect(rows.nth(0).getByLabel("Quantity")).toBeFocused();
   await page.keyboard.type("2"); // the unit starts as patty: 2 patty = 60 pieces
   await expect(rows.nth(0).getByLabel("Unit")).toHaveValue("patty");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("60");
+  await expect(rows.nth(0).getByTestId("sheet-line-total")).toHaveText("9,000.00"); // the rate is per patty: 2 patty x 4,500 (150 a piece)
 
   // The same 2 can be dozens or pieces: different dealers count in different ways.
   await rows.nth(0).getByLabel("Unit").selectOption("dozen");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("24"); // 2 dozens
+  await expect(rows.nth(0).getByTestId("sheet-line-total")).toHaveText("3,600.00"); // the rate is now per dozen: 2 x 1,800
   await rows.nth(0).getByLabel("Unit").selectOption("piece");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText("2");
+  await expect(rows.nth(0).getByTestId("sheet-line-total")).toHaveText("300.00"); // per piece: 2 x 150
 
   // Cartons and patty-per-carton can be typed by hand. This item's carton is 30 patty (900 pieces).
   await expect(rows.nth(0).getByLabel("Patty per carton")).toHaveAttribute("placeholder", "30");
   await rows.nth(0).getByLabel("Cartons").fill("2"); // 2 cartons x 30 patty = 60 patty = 1800 pieces
   await expect(rows.nth(0).getByLabel("Unit")).toHaveValue("patty");
   await expect(rows.nth(0).getByLabel("Quantity")).toHaveValue("60");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText(/1,?800/);
+  await expect(rows.nth(0).getByTestId("sheet-line-total")).toHaveText("2,70,000.00"); // 1,800 pieces x 150
   await rows.nth(0).getByLabel("Patty per carton").fill("20"); // this bill's cartons hold 20 patty: still 2 cartons
   await expect(rows.nth(0).getByLabel("Quantity")).toHaveValue("40");
-  await expect(rows.nth(0).getByTestId("sheet-total-qty")).toContainText(/1,?200/);
+  await expect(rows.nth(0).getByTestId("sheet-line-total")).toHaveText("1,80,000.00"); // 1,200 pieces x 150
   await rows.nth(0).getByLabel("Quantity").click();
 
   // Enter goes down to the next row's item cell, like a spreadsheet.
@@ -162,21 +162,23 @@ test("amounts without and with GST appear as soon as quantity and rate are fille
   await page.keyboard.press("Enter");
   await page.keyboard.type("2"); // 2 patty = 60 pieces
   await page.keyboard.press("Tab");
-  // The sheet no longer has discount or CGST/SGST/IGST columns, just the two amounts.
-  await expect(page.getByRole("columnheader", { name: "Amount without GST" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Amount with GST" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: /Discount|CGST|SGST|IGST/ })).toHaveCount(0);
+  // One Total amount column (rate x quantity) with CGST, SGST and IGST beside it; no discount and no total-quantity column.
+  await expect(page.getByRole("columnheader", { name: "Total amount" })).toBeVisible();
+  for (const name of ["CGST", "SGST", "IGST"]) await expect(page.getByRole("columnheader", { name })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /Discount|Total qty|with GST/ })).toHaveCount(0);
 
   const rate = Number((await row.getByLabel("Rate", { exact: true }).getAttribute("placeholder"))!.replace(/,/g, ""));
-  const ex = 60 * rate;
-  await expect(row.getByTestId("sheet-amount-ex")).toHaveText(ex.toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  const ex = 2 * rate; // the rate shown is per patty and the quantity is 2 patty
+  await expect(row.getByTestId("sheet-line-total")).toHaveText(ex.toLocaleString("en-IN", { minimumFractionDigits: 2 }));
   const gst = Number((await row.getByTestId("sheet-gst-rate").innerText()).replace("%", ""));
-  await expect(row.getByTestId("sheet-line-total")).toHaveText((ex + Math.round(ex * gst) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  const half = (Math.round((ex * gst) / 2) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+  await expect(row.getByTestId("sheet-cgst")).toHaveText(half);
+  await expect(row.getByTestId("sheet-sgst")).toHaveText(half);
   await expect(page.getByTestId("sheet-total-ex")).not.toHaveText("");
 
-  // Typing an own rate updates both amounts at once: 60 pieces at 25 = 1500 before GST.
+  // Typing an own rate (per patty) updates the amount at once: 2 patty at 25 = 50.
   await row.getByLabel("Rate", { exact: true }).fill("25");
-  await expect(row.getByTestId("sheet-amount-ex")).toHaveText("1,500.00");
+  await expect(row.getByTestId("sheet-line-total")).toHaveText("50.00");
   await page.getByRole("button", { name: "Cards" }).click();
 });
 

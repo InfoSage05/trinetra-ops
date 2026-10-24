@@ -49,6 +49,15 @@ describe("three rates per item", () => {
     expect(preview.lines.map((l) => l.unitPrice.toString())).toEqual(["80", "130", "100", "77"]); // A, C, the bill's B, then a typed rate beats a chosen one
   });
 
+  it("a rate typed per dozen or per patty keeps the line total exact, using up to 4 decimals per piece", async () => {
+    const { owner, item } = await world();
+    const customer = await makeCustomer({ name: "Dozen buyer" });
+    const line = (quantity: string, unitPrice: string) => previewBill(owner, { customerId: customer.id, placeOfSupply: "21", lines: [{ productId: item.id, quantity, unitPrice }] });
+    expect((await line("12", "8.3333")).lines[0].taxableValue.toString()).toBe("100"); // 100 a dozen: 12 pieces at 8.3333
+    expect((await line("60", "33.3333")).lines[0].taxableValue.toString()).toBe("2000"); // 1000 a patty: 60 pieces = 2 patty
+    await expect(line("12", "8.33333")).rejects.toBeInstanceOf(ValidationError); // 5 decimals is too many
+  });
+
   it("a bill uses the customer's rate type, the bill can override it, and a typed rate beats both", async () => {
     const { owner, item } = await world();
     const big = await createCustomer(owner, { name: "Big Wholesaler", billingAddress: "x", stateCode: "21", rateTier: "A" });

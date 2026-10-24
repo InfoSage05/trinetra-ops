@@ -5,12 +5,12 @@ import type { Bill, BillLineItem } from "@/generated/prisma/client";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError, ValidationError } from "@/lib/errors";
 import { stateName } from "@/lib/gst";
-import { D, ZERO, toFixed2 } from "@/lib/money";
+import { D, ZERO, toFixed2, toFixed4 } from "@/lib/money";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
 import { RATE_TIERS, rateFor, type RateTier } from "@/lib/rates";
 import { financialYearOf } from "@/lib/time";
 import {
-  entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveInt, positiveMoney, quantity, stateCode,
+  entityId, gstRate, idempotencyKey, money, nonNegativeQuantity, optionalText, parseInput, positiveInt, positiveMoney, quantity, rate4, stateCode,
 } from "@/lib/validation";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { computeLine, computeTotals, isInterState, taxOnTaxableValue, type DocumentTotals, type LineAmounts, type TaxSplit } from "@/domain/tax";
@@ -36,7 +36,7 @@ export const billLineSchema = z
     quantity: quantity.optional(),
     cartons: nonNegativeQuantity.optional(),
     loosePieces: nonNegativeQuantity.optional(),
-    unitPrice: money.optional(),
+    unitPrice: rate4.optional(), // per piece, up to 4 decimals
     /** Use this one rate of the item (A, B or C) for just this line, instead of the bill's rate type. */
     rateTier: z.enum(RATE_TIERS).optional(),
     /** Pieces in one carton for just this line (the carton size can differ from bill to bill). */
@@ -229,7 +229,7 @@ export async function createBill(session: Session | null, rawInput: unknown): Pr
           lineItems: {
             create: preview.lines.map((l, i) => ({
               lineNo: i + 1, productId: l.productId, productName: l.productName, productSku: l.productSku,
-              hsnCode: l.hsnCode, unit: l.unit, qtyPerCarton: l.qtyPerCarton, quantity: toFixed2(l.quantity), unitPrice: toFixed2(l.unitPrice),
+              hsnCode: l.hsnCode, unit: l.unit, qtyPerCarton: l.qtyPerCarton, quantity: toFixed2(l.quantity), unitPrice: toFixed4(l.unitPrice),
               discountAmount: toFixed2(l.discountAmount), taxableValue: toFixed2(l.taxableValue), gstRate: toFixed2(l.gstRate),
               cgstAmount: toFixed2(l.cgstAmount), sgstAmount: toFixed2(l.sgstAmount), igstAmount: toFixed2(l.igstAmount),
               lineTotal: toFixed2(l.lineTotal), shortfallQuantity: l.shortfallQuantity ? toFixed2(l.shortfallQuantity) : null,

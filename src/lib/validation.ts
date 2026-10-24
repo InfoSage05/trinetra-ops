@@ -4,17 +4,19 @@ import { cleanGstin, gstinProblem, isValidHsn, isValidStateCode } from "@/lib/gs
 
 const DECIMAL_2DP = /^-?\d{1,10}(\.\d{1,2})?$/;
 
-function decimalField(message: string, check: (n: number) => boolean) {
+function decimalField(message: string, check: (n: number) => boolean, pattern: RegExp = DECIMAL_2DP) {
   return z
     .union([z.string(), z.number()])
     .transform((v) => String(v).trim().replace(/,/g, ""))
-    .refine((v) => DECIMAL_2DP.test(v) && check(Number(v)), message);
+    .refine((v) => pattern.test(v) && check(Number(v)), message);
 }
 
 export const quantity = decimalField("Enter a quantity greater than 0 (up to 2 decimals).", (n) => n > 0);
 export const nonNegativeQuantity = decimalField("Enter 0 or more (up to 2 decimals).", (n) => n >= 0);
 export const signedQuantity = decimalField("Enter a non-zero quantity, e.g. -3 or 5.", (n) => n !== 0);
 export const money = decimalField("Enter an amount of 0 or more (up to 2 decimals).", (n) => n >= 0);
+/** A rate per piece may carry 4 decimals, because a rate typed per dozen or per patty is divided down to one piece. */
+export const rate4 = decimalField("Enter a rate of 0 or more (up to 4 decimals).", (n) => n >= 0, /^-?\d{1,10}(\.\d{1,4})?$/);
 export const positiveMoney = decimalField("Enter an amount greater than 0.", (n) => n > 0);
 export const signedMoney = decimalField("Enter a non-zero amount (use minus for a refund).", (n) => n !== 0);
 export const gstRate = decimalField("GST rate must be between 0 and 40.", (n) => n >= 0 && n <= 40);

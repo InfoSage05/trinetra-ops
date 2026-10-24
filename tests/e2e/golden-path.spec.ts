@@ -24,7 +24,6 @@ test("owner bills 1 carton + 3 pieces with freight; stock panel shows the item; 
   await expect(page.getByTestId("stock-bar")).toContainText("2 cartons (20 pcs)");
   await page.getByLabel("Unit", { exact: true }).selectOption("piece"); // 13 loose pieces
   await page.getByLabel("Quantity", { exact: true }).fill("13");
-  await expect(page.getByTestId("total-qty")).toContainText("13");
   await expect(page.getByTestId("stock-bar")).toContainText("After this bill: 7 pcs");
   await page.getByLabel("Freight charges").fill("100");
   await expect(page.getByText("Grand total")).toBeVisible(); // live preview arrived

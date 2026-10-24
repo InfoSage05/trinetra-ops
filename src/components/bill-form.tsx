@@ -19,7 +19,7 @@ import { GstSummary } from "@/components/gst-summary";
 import { CHARGE_FIELDS, QTY_UNITS, applyLineEdit, blankLine, cartonPieces, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
-import { estimateLine } from "@/components/bill-amounts";
+import { estimateLine, lineRate } from "@/components/bill-amounts";
 import type { SavedCustomer } from "@/components/customer-dialog";
 import { createBillAction, previewBillAction } from "@/actions/billing";
 import type { Plain } from "@/lib/action-result";
@@ -105,7 +105,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
       productId: l.productId,
       quantity: pieceCount(l), // whatever it was typed in (cartons, patty, dozens, pieces), the bill is worked out in pieces
       ...(l.pattyPerCarton.trim() ? { qtyPerCarton: cartonPieces(l, productOf(l)).toString() } : {}), // this line's own carton size
-      ...(l.unitPrice.trim() ? { unitPrice: l.unitPrice.trim() } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
+      ...(l.unitPrice.trim() ? { unitPrice: lineRate(productOf(l)!, l, rateTier).toFixed(4) } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
     charges: CHARGE_FIELDS.filter((c) => charges[c.kind].trim() !== "" && Number(charges[c.kind]) !== 0).map((c) => ({ kind: c.kind, amount: charges[c.kind].trim() })),
@@ -264,15 +264,15 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
             <BillSheet
               products={products} lines={lines} filledLines={filledLines} preview={preview}
               charges={charges} onCharges={setCharges} onEdit={editAt} onClear={clearAt} onActivate={setActiveIndex}
-              rateTier={rateTier} prefs={sheetPrefs} onPrefs={setSheetPrefs}
+              rateTier={rateTier} interState={placeOfSupply !== businessStateCode} prefs={sheetPrefs} onPrefs={setSheetPrefs}
             />
           ) : (
             <>
           {lines.map((line, index) => {
             const product = productOf(line);
-            const pieces = linePieces(line, product);
             const previewIndex = filledLines.findIndex((l) => l.rowId === line.rowId);
             const pl = previewIndex >= 0 ? preview?.lines[previewIndex] : undefined;
+            const money = pl ? { ex: D(pl.taxableValue), cgst: D(pl.cgstAmount), sgst: D(pl.sgstAmount), igst: D(pl.igstAmount) } : estimateLine(product, line, rateTier, placeOfSupply !== businessStateCode);
             return (
               <Card key={line.rowId} data-testid="bill-line" onFocusCapture={() => setActiveIndex(index)}>
                 <CardContent className="space-y-3 pt-6">
@@ -283,7 +283,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                   <ProductPicker products={products} value={line.productId} onSelect={(p) => { update(line.rowId, { productId: p.id, rateChoice: "bill", unitPrice: "" }); setActiveIndex(index); }} />
                   {product && (
                     <>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div className="space-y-1"><Label>Quantity</Label><Input aria-label="Quantity" className="h-12 text-lg" inputMode="decimal" value={line.qty} onChange={(e) => update(line.rowId, { qty: e.target.value })} /></div>
                         <div className="space-y-1">
                           <Label>Unit</Label>
@@ -293,14 +293,17 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                         </div>
                         <div className="space-y-1"><Label>No of cartons</Label><Input aria-label="Cartons" className="h-12 text-lg" inputMode="decimal" value={line.cartons} onChange={(e) => update(line.rowId, { cartons: e.target.value })} /></div>
                         <div className="space-y-1"><Label>Patty in 1 carton</Label><Input aria-label="Patty per carton" className="h-12 text-lg" inputMode="decimal" placeholder={formatQuantity(D(product.qtyPerCarton).div(30).toDecimalPlaces(4))} value={line.pattyPerCarton} onChange={(e) => update(line.rowId, { pattyPerCarton: e.target.value })} /></div>
-                        <div className="space-y-1"><Label>Total qty</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="total-qty">{formatQuantity(pieces)} {product.unit}</p></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="space-y-1"><Label>Rate</Label><RateChoicePicker product={product} line={line} billTier={rateTier} onChange={(patch) => update(line.rowId, patch)} /></div>
+                        <div className="space-y-1"><Label>Rate per {QTY_UNITS.find((u) => u.value === line.unit)?.label.toLowerCase().replace(/s$/, "")}</Label><RateChoicePicker product={product} line={line} billTier={rateTier} onChange={(patch) => update(line.rowId, patch)} /></div>
                         <div className="space-y-1"><Label>GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3">{formatQuantity(product.gstRate)}%</p></div>
-                        <div className="space-y-1"><Label>Amount without GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-medium" data-testid="line-ex">{(pl ? { ex: D(pl.taxableValue) } : estimateLine(product, line, rateTier)) ? formatINR((pl ? { ex: D(pl.taxableValue) } : estimateLine(product, line, rateTier))!.ex) : "-"}</p></div>
-                        <div className="space-y-1"><Label>Amount with GST</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{(pl ? { inc: D(pl.lineTotal) } : estimateLine(product, line, rateTier)) ? formatINR((pl ? { inc: D(pl.lineTotal) } : estimateLine(product, line, rateTier))!.inc) : "-"}</p></div>
+                        <div className="space-y-1"><Label>Total amount</Label><p className="flex h-12 items-center rounded-md bg-muted px-3 font-semibold" data-testid="line-total">{money ? formatINR(money.ex) : "-"}</p></div>
                       </div>
+                      {money && (D(money.cgst).plus(money.sgst).plus(money.igst).greaterThan(0)) && (
+                        <p className="text-sm text-muted-foreground" data-testid="line-gst">
+                          GST {formatQuantity(product.gstRate)}%: {D(money.igst).greaterThan(0) ? `IGST ${formatINR(money.igst)}` : `CGST ${formatINR(money.cgst)} + SGST ${formatINR(money.sgst)}`}
+                        </p>
+                      )}
                       {pl?.shortfallQuantity && <p className="text-sm text-destructive">Short by {formatQuantity(pl.shortfallQuantity)} {product.unit}. Check the stock box.</p>}
                     </>
                   )}

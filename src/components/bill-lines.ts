@@ -77,6 +77,10 @@ const show = (d: Decimal) => d.toDecimalPlaces(4).toString();
  */
 export function applyLineEdit(line: Line, patch: Partial<Line>, product: BillableProduct | undefined): Line {
   const next = { ...line, ...patch };
+  if ("unit" in patch && patch.unit !== line.unit && line.unitPrice.trim() !== "" && !("unitPrice" in patch)) {
+    const typed = asDecimal(line.unitPrice);
+    if (typed) next.unitPrice = typed.div(piecesPerUnit(line.unit)).times(piecesPerUnit(next.unit)).toDecimalPlaces(4).toString();
+  }
   const typedCartons = "cartons" in patch;
   const typedCarton = "pattyPerCarton" in patch;
   if (!product) return next;

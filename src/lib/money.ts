@@ -24,6 +24,11 @@ export function toFixed2(value: DecimalInput): string {
   return round2(value).toFixed(2);
 }
 
+/** A rate per piece kept to 4 decimals (a dozen rate divided by 12 does not fit in 2). */
+export function toFixed4(value: DecimalInput): string {
+  return D(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
+}
+
 export function roundToRupee(value: DecimalInput): { rounded: Decimal; roundOff: Decimal } {
   const exact = round2(value);
   const rounded = exact.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
