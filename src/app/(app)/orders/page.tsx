@@ -27,9 +27,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
           <h2 className="mb-2 font-semibold">Still to make for pending orders</h2>
           <ul className="space-y-1 text-sm">
             {toMake.map((n) => (
-              <li key={n.productId} className="flex justify-between gap-2">
-                <Link href={`/inventory/${n.productId}`} className="underline">{n.productName}</Link>
-                <span>make {describeStock(n.toMake.toString(), n.qtyPerCarton)}</span>
+              <li key={n.productId} className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <Link href={`/inventory/${n.productId}`} className="mr-auto underline">{n.productName}</Link>
+                <span className="shrink-0">make {describeStock(n.toMake.toString(), n.qtyPerCarton)}</span>
               </li>
             ))}
           </ul>

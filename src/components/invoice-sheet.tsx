@@ -24,7 +24,7 @@ export function InvoiceSheet({ view, qrs }: Props) {
   const totalQty = view.lines.reduce((sum, l) => sum + Number(l.quantity), 0);
 
   return (
-    <article className="invoice-a4 mx-auto w-full max-w-[210mm] bg-white p-3 text-[11px] leading-snug text-black">
+    <article className="invoice-a4 mx-auto w-full min-w-[720px] max-w-[210mm] bg-white p-3 text-[11px] leading-snug text-black">
       <table className="w-full border-collapse">
         <colgroup>
           {[4, 22, 7, 7, 7, 8, 5, 8, 8, 8, 8, 8].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
@@ -133,7 +133,7 @@ export function InvoiceSheet({ view, qrs }: Props) {
               {view.termsLines.map((line, i) => <p key={i}>{line}</p>)}
             </td>
             <td colSpan={6} className={cell}>
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col gap-2">
                 <div>
                   <p className="font-bold">Tax summary</p>
                   {view.taxSummary.map((r) => (
@@ -142,7 +142,7 @@ export function InvoiceSheet({ view, qrs }: Props) {
                     </p>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {/* eslint-disable @next/next/no-img-element -- QR codes are inline data URLs */}
                   {qrs.irnQr && <figure className="text-center"><img src={qrs.irnQr} alt="e-invoice QR" className="h-20 w-20" /><figcaption className="text-[9px]">e-Invoice</figcaption></figure>}
                   {qrs.upiQr && <figure className="text-center"><img src={qrs.upiQr} alt="UPI QR" className="h-20 w-20" /><figcaption className="text-[9px]">Scan to pay {formatAmount(view.payment.amountDue)}</figcaption></figure>}

@@ -38,8 +38,8 @@ export function ProductPicker({ products, value, onSelect }: { products: Billabl
               {shown.map((p) => (
                 <CommandItem key={p.id} value={`${p.name} ${p.size ?? ""} ${p.categoryName ?? ""} ${p.sku ?? ""}`} onSelect={() => { onSelect(p); setOpen(false); }}>
                   <div className="flex w-full justify-between gap-2">
-                    <span>{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}{p.categoryName && <span className="block text-xs text-muted-foreground">{p.categoryName}</span>}</span>
-                    <span className="whitespace-nowrap text-sm text-muted-foreground">{describeStock(p.stock, p.qtyPerCarton)} · {formatINR(p.unitPrice)} + GST {Number(p.gstRate)}%</span>
+                    <span className="min-w-0">{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.sku && <span className="text-muted-foreground"> ({p.sku})</span>}{p.categoryName && <span className="block text-xs text-muted-foreground">{p.categoryName}</span>}</span>
+                    <span className="shrink-0 whitespace-nowrap text-sm text-muted-foreground">{describeStock(p.stock, p.qtyPerCarton)} · {formatINR(p.unitPrice)} + GST {Number(p.gstRate)}%</span>
                   </div>
                 </CommandItem>
               ))}

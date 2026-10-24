@@ -106,12 +106,12 @@ function Chip({ className, icon }: { className: string; icon: React.ReactNode })
 function Stat({ label, value, href, icon, tone, color }: { label: string; value: string; href?: string; icon: React.ReactNode; tone?: "warn"; color?: string }) {
   const body = (
     <Card className={cn("bg-gradient-to-br transition-all hover:-translate-y-0.5 hover:shadow-lg", color ?? "from-card to-card", tone === "warn" && "ring-rose-300")}>
-      <CardContent className="flex items-center justify-between gap-2 pt-6">
-        <div className="min-w-0">
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums">{value}</p>
+          {icon}
         </div>
-        {icon}
+        <p className="mt-1 text-lg font-bold tracking-tight tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
       </CardContent>
     </Card>
   );

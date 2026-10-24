@@ -13,7 +13,7 @@ const jakartaDisplay = Plus_Jakarta_Sans({
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = { title: "Trinetra Candles", description: "Billing and stock", applicationName: "Trinetra" };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#7c2d12" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#7c2d12" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

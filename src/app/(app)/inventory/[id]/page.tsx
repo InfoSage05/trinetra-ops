@@ -23,7 +23,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       <Link href="/inventory" className="text-sm underline">← All stock</Link>
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
-          <h1 className="flex items-center gap-2">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
+          <h1 className="flex flex-wrap items-center gap-x-2">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
           <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · Rates: ${item.rateA ? `A ${formatINR(item.rateA.toString())} · ` : ""}B ${formatINR(item.unitPrice.toString())}${item.rateC ? ` · C ${formatINR(item.rateC.toString())}` : ""}` : ""}</p>
         </div>
         {isOwner && <Link href={`/billing/new?product=${item.id}`} className={buttonVariants({ size: "lg" })}>Bill this item</Link>}

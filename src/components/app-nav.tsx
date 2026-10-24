@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, Boxes, ClipboardCheck, ClipboardList, FileText, FlameKindling, House, KeyRound, LogOut, Package, ReceiptText, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
@@ -40,8 +41,16 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
   const bestMatch = links
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  // On a phone the tabs are a sideways scroll strip; the open one should slide into view.
+  const activeRef = useRef<HTMLAnchorElement | null>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [bestMatch]);
   return (
-    <header className="sticky top-0 z-20 bg-gradient-to-r from-sidebar via-[oklch(0.27_0.055_28)] to-[oklch(0.3_0.075_18)] text-sidebar-foreground shadow-[0_1px_0_var(--sidebar-border)_inset,0_8px_24px_-16px_rgb(31_16_6_/_0.6)]">
+    <header
+      className="sticky top-0 z-20 bg-gradient-to-r from-sidebar via-[oklch(0.27_0.055_28)] to-[oklch(0.3_0.075_18)] text-sidebar-foreground shadow-[0_1px_0_var(--sidebar-border)_inset,0_8px_24px_-16px_rgb(31_16_6_/_0.6)]"
+      style={{ paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}
+    >
       <div className="mx-auto flex max-w-[92rem] items-center pl-3 sm:pl-4">
         <Link href="/dashboard" className="mr-2.5 flex shrink-0 items-center gap-2.5 self-stretch rounded-md outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70 md:mr-0">
           <span className="grid size-8 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-[0_2px_6px_rgb(245_158_11_/_0.35)]">
@@ -53,16 +62,18 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
           </span>
         </Link>
         <span aria-hidden className="mx-2.5 hidden h-5 w-px shrink-0 bg-sidebar-foreground/25 md:block" />
-        <nav aria-label="Main" className="flex flex-1 items-center gap-2 overflow-x-auto py-3 sm:gap-2.5 md:flex-wrap md:overflow-visible">
+        {/* On small screens the strip scrolls sideways; a soft fade on the edges shows there is more. */}
+        <nav aria-label="Main" className="flex flex-1 items-center gap-1.5 overflow-x-auto py-3 [mask-image:linear-gradient(to_right,transparent,black_1.25rem,black_calc(100%-1.75rem),transparent)] sm:gap-2.5 md:flex-wrap md:overflow-visible md:[mask-image:none]">
           {links.map(({ href, label, icon: Icon, active: activeClass, tint }) => {
             const active = bestMatch === href;
             return (
               <Link
                 key={href}
+                ref={active ? activeRef : undefined}
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70",
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/70 sm:px-3.5",
                   active
                     ? `${activeClass} font-semibold shadow-md`
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",

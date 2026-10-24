@@ -64,7 +64,7 @@ function RateRow({ item }: { item: Item }) {
     return (
       <div className="rounded-lg border bg-muted/30 p-2" data-testid={`rate-box-${tier}`}>
         <p className="mb-1 text-xs font-semibold text-muted-foreground">{label}</p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Carton ₹</span>
           <Input aria-label={`Per carton ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
             value={typed ?? roundedCarton} onChange={(e) => setCarton(tier, e.target.value)} onKeyDown={onEnter} />

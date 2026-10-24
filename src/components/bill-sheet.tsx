@@ -59,7 +59,12 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
   const matches = query !== null && query.trim() !== "" ? rank(products, query).slice(0, 8) : [];
   const measure = () => {
     const r = ref.current?.getBoundingClientRect();
-    if (r) setBox({ left: r.left, top: r.bottom, width: Math.max(r.width, 320) });
+    if (!r) return;
+    // Stay inside the window: on a small screen the cell may be scrolled out of view,
+    // and an unclamped popup would appear half off the screen or overlap other things.
+    const width = Math.min(Math.max(r.width, 320), window.innerWidth - 16);
+    const left = Math.min(Math.max(r.left, 8), window.innerWidth - width - 8);
+    setBox({ left, top: r.bottom, width });
   };
   const pick = (p: BillableProduct) => { onPick(p); setQuery(null); };
 
@@ -98,8 +103,8 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
               className={`flex cursor-pointer justify-between gap-2 px-2 py-1.5 ${i === highlight ? "bg-yellow-100" : ""}`}
               onMouseDown={(e) => { e.preventDefault(); pick(p); onNext(); }}
             >
-              <span>{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.categoryName && <span className="text-muted-foreground"> · {p.categoryName}</span>}</span>
-              <span className="whitespace-nowrap text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
+              <span className="min-w-0">{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.categoryName && <span className="text-muted-foreground"> · {p.categoryName}</span>}</span>
+              <span className="shrink-0 text-sm text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
             </li>
           ))}
         </ul>,
@@ -173,7 +178,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           <button type="button" aria-label="Show more rows" className={btn} onClick={() => onPrefs({ rows: prefs.rows + 5 })} disabled={rowCount >= MAX_BILL_ITEMS}>+5</button>
           <span className="text-muted-foreground">(up to {MAX_BILL_ITEMS} items on a bill)</span>
         </div>
-        <span className="text-xs text-muted-foreground">Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
+        <span className="hidden text-xs text-muted-foreground sm:inline">Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
       </div>
     <div ref={frameRef} className="resize overflow-auto rounded-xl bg-card ring-1 ring-foreground/10" style={{ minHeight: "12rem", maxHeight: "none" }} data-testid="bill-sheet">
       <div style={{ zoom: zoom / 100 }}>

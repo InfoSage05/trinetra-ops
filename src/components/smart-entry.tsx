@@ -76,7 +76,8 @@ export function SmartEntry({ catalogue, voiceAvailable, aiAvailable, canApproveC
         {reviewing.notes.map((n) => <p key={n} className="rounded-lg bg-warning/15 p-2 text-sm text-warning-foreground">{n}</p>)}
         <LinesEditor lines={reviewing.lines} catalogue={catalogue} onChange={(lines) => setReviewing({ ...reviewing, lines })} />
         <Button variant="outline" onClick={() => setReviewing({ ...reviewing, lines: [...reviewing.lines, blankLine()] })}>+ Add an item</Button>
-        <div className="grid grid-cols-2 gap-2">
+        {/* Full width on a phone so the long labels never clip; side by side on a laptop. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button variant="outline" className="h-14" onClick={() => setReviewing(null)}>Cancel</Button>
           <Button className="h-14" disabled={!ready || busy} onClick={approve}>{reviewing.kind === "PRODUCTION" ? "Approve and add to stock" : "Approve and send counts"}</Button>
         </div>

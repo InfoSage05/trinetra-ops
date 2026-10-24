@@ -184,7 +184,8 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
             )}
             <div className="space-y-1.5" data-testid="rate-tier">
               <Label>Rate for this bill</Label>
-              <div role="group" aria-label="Rate for this bill" className="grid grid-cols-3 gap-2">
+              {/* Full-width buttons on a phone (the long labels still fit); three-up on a laptop. */}
+              <div role="group" aria-label="Rate for this bill" className="grid gap-2 sm:grid-cols-3">
                 {RATE_TIERS.map((t) => (
                   <Button key={t} type="button" variant={rateTier === t ? "default" : "outline"} className="h-12" aria-pressed={rateTier === t} onClick={() => setRateTier(t)}>
                     {RATE_TIER_LABELS[t]}
@@ -285,7 +286,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
                 ? <Row label="IGST" value={formatINR(preview.igstTotal)} />
                 : <><Row label="CGST" value={formatINR(preview.cgstTotal)} /><Row label="SGST" value={formatINR(preview.sgstTotal)} /></>}
               <Row label="Round off" value={formatINR(preview.roundOff)} />
-              <div className="flex justify-between pt-2 text-xl font-semibold"><span>Grand total</span><span>{formatINR(preview.grandTotal)}</span></div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 pt-2 text-lg font-semibold sm:text-xl"><span>Grand total</span><span className="tabular-nums">{formatINR(preview.grandTotal)}</span></div>
               <p className="pt-1 text-muted-foreground">{amountInWords(preview.grandTotal)}</p>
               {preview.charges.length > 0 && <p className="pt-1 text-xs text-muted-foreground">Charges are taxed at {formatQuantity(preview.charges[0].gstRate)}% (the highest rate among the items). Confirm this rate with your CA.</p>}
             </CardContent></Card>
@@ -316,7 +317,7 @@ export function BillForm({ products, businessStateCode, initialCustomer = null, 
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border/80 bg-background/85 p-3 backdrop-blur-md [box-shadow:0_-10px_32px_-16px_rgb(64_38_16/0.22)]">
+      <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border/80 bg-background/85 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-md [box-shadow:0_-10px_32px_-16px_rgb(64_38_16/0.22)]">
         <div className={`mx-auto max-w-5xl ${sideStock ? "lg:hidden" : ""}`}><StockBar product={activeProduct} availableNow={stockNow} takingNow={takingNow} /></div>
         <Button size="lg" className="mx-auto flex h-14 w-full max-w-5xl text-lg font-semibold shadow-[0_10px_30px_-10px_color-mix(in_oklab,var(--color-primary)_65%,transparent)]" disabled={saving} onClick={() => save(false)}>
           {saving ? "Saving…" : preview ? `Save bill · ${formatINR(preview.grandTotal)}` : "Save bill"}

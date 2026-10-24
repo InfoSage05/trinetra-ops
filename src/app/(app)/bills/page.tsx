@@ -29,7 +29,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
           <li key={b.id}>
             <Link href={`/bills/${b.id}`} className="flex flex-wrap items-center gap-2 p-4 transition-colors hover:bg-amber-500/[0.06]">
               <div className="mr-auto min-w-0"><p className="font-medium">{b.invoiceNumber} · {b.customerName}</p><p className="text-sm text-muted-foreground">{formatDateIN(b.billDate)}</p></div>
-              <div className="text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
+              <div className="ml-auto text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
                 <Badge variant={b.payment.status === "PAID" ? "success" : "destructive"}>{STATUS_LABEL[b.payment.status]}{b.payment.status !== "PAID" ? ` · due ${formatINR(b.payment.amountDue)}` : ""}</Badge></div>
             </Link>
           </li>

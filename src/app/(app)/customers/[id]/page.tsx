@@ -30,8 +30,8 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-        <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Billed so far</p><p className="mt-0.5 text-2xl font-bold tabular-nums">{formatINR(billedTotal)}</p></div>
-        <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Still to pay</p><p className={`mt-0.5 text-2xl font-bold tabular-nums ${totalDue.greaterThan(0) ? "text-destructive" : ""}`} data-testid="customer-due">{formatINR(totalDue)}</p></div>
+        <div className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Billed so far</p><p className="mt-0.5 text-lg font-bold tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{formatINR(billedTotal)}</p></div>
+        <div className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]"><p className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Still to pay</p><p className={`mt-0.5 text-lg font-bold tabular-nums [overflow-wrap:anywhere] sm:text-2xl ${totalDue.greaterThan(0) ? "text-destructive" : ""}`} data-testid="customer-due">{formatINR(totalDue)}</p></div>
       </div>
 
       <ul className="divide-y divide-border/80 rounded-xl bg-card ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
@@ -39,7 +39,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <li key={b.id}>
             <Link href={`/bills/${b.id}`} className="flex flex-wrap items-center gap-2 p-4 transition-colors hover:bg-amber-500/[0.05]">
               <div className="mr-auto"><p className="font-medium">{b.invoiceNumber}</p><p className="text-sm text-muted-foreground">{formatDateIN(b.billDate)}</p></div>
-              <div className="text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
+              <div className="ml-auto text-right"><p className="font-semibold tabular-nums">{formatINR(b.grandTotal)}</p>
                 <Badge variant={b.payment.status === "PAID" ? "success" : "destructive"}>{STATUS_LABEL[b.payment.status]}{b.payment.status !== "PAID" ? ` · due ${formatINR(b.payment.amountDue)}` : ""}</Badge></div>
             </Link>
           </li>
