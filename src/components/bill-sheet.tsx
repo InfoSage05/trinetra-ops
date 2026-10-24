@@ -10,7 +10,7 @@ import type { Plain } from "@/lib/action-result";
 import type { BillPreview } from "@/domain/billing";
 import { D, amountInWords, formatAmount, formatQuantity } from "@/lib/money";
 import { MAX_BILL_ITEMS } from "@/lib/limits";
-import { MAX_ZOOM, MIN_ZOOM, type SheetPrefs } from "@/lib/client/use-sheet-prefs";
+import { MAX_ZOOM, MIN_COL_WIDTH, MIN_ZOOM, type SheetPrefs } from "@/lib/client/use-sheet-prefs";
 
 /**
  * The bill as a spreadsheet, laid out like the owner's Excel template. Keyboard works like Excel:
@@ -33,7 +33,8 @@ type Props = {
   onPrefs: (change: Partial<SheetPrefs>) => void;
 };
 
-const NATURAL_WIDTH = 980; // the table is laid out this wide before zooming
+// Standard column widths in pixels (before zooming). The owner can drag any of them wider or narrower, like in Excel.
+const DEFAULT_COLS = [4, 19, 5, 6, 5, 8, 8, 7, 12, 5, 10, 10, 3].map((p) => Math.round(p * 9.8));
 const COL = { item: 0, quantity: 1, unit: 2, rate: 3 } as const;
 const th = "border border-neutral-400 bg-neutral-100 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight";
 const td = "border border-neutral-300 px-1 py-0 align-middle";
@@ -119,19 +120,41 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
   const tableRef = useRef<HTMLTableElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [fitZoom, setFitZoom] = useState(100);
+  const [liveCols, setLiveCols] = useState<number[] | null>(null); // widths while a column is being dragged
+  const cols = liveCols ?? prefs.cols ?? DEFAULT_COLS;
+  const naturalWidth = cols.reduce((a, b) => a + b, 0);
   const rowCount = Math.min(MAX_BILL_ITEMS, Math.max(prefs.rows, lines.length + 1));
 
   // "Fit" mode: scale the sheet so its whole width is on screen, so nobody has to scroll sideways.
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
-    const measure = () => setFitZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.floor((frame.clientWidth / NATURAL_WIDTH) * 100))));
+    const measure = () => setFitZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.floor((frame.clientWidth / naturalWidth) * 100))));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [prefs.wide]);
+  }, [prefs.wide, naturalWidth]);
   const zoom = prefs.zoom === 0 ? fitZoom : prefs.zoom;
+  // Drag a header edge to change that column's width. The zoom is taken into account so the edge follows the mouse.
+  const startResize = (index: number) => (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidths = [...cols];
+    const scale = zoom / 100;
+    const widthAt = (clientX: number) => Math.max(MIN_COL_WIDTH, Math.min(900, Math.round(startWidths[index] + (clientX - startX) / scale)));
+    const move = (ev: PointerEvent) => setLiveCols(startWidths.map((w, i) => (i === index ? widthAt(ev.clientX) : w)));
+    const up = (ev: PointerEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      onPrefs({ cols: startWidths.map((w, i) => (i === index ? widthAt(ev.clientX) : w)) });
+      setLiveCols(null);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  };
   const setZoom = (value: number) => onPrefs({ zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value)) });
 
   const focusCell = (row: number, col: number) => {
@@ -194,17 +217,29 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           <button type="button" aria-label="Show more rows" className={btn} onClick={() => onPrefs({ rows: prefs.rows + 5 })} disabled={rowCount >= MAX_BILL_ITEMS}>+5</button>
           <span className="text-muted-foreground">(up to {MAX_BILL_ITEMS} items on a bill)</span>
         </div>
-        <span className="hidden text-xs text-muted-foreground sm:inline">Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
+        <button type="button" className={btn} disabled={prefs.cols === null} onClick={() => onPrefs({ cols: null })}>Reset column widths</button>
+        <span className="hidden text-xs text-muted-foreground sm:inline">Tip: drag the edge of a column heading to change its width (double-click it to reset). Tip: drag the bottom-right corner of the sheet to make it taller or wider.</span>
       </div>
     <div ref={frameRef} className="resize overflow-auto rounded-xl bg-card ring-1 ring-foreground/10" style={{ minHeight: "12rem", maxHeight: "none" }} data-testid="bill-sheet">
       <div style={{ zoom: zoom / 100 }}>
-      <table ref={tableRef} className="w-full border-collapse text-sm" style={{ minWidth: NATURAL_WIDTH }}>
+      <table ref={tableRef} className="border-collapse text-sm" style={{ width: naturalWidth, tableLayout: "fixed" }}>
         <colgroup>
-          {[4, 19, 5, 6, 5, 8, 8, 7, 12, 5, 10, 10, 3].map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}
+          {cols.map((w, i) => <col key={i} style={{ width: w }} />)}
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "Qty per carton", "Quantity", "Unit", "Total qty", "Rate", "GST %", "Amount without GST", "Amount with GST", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Qty per carton", "Quantity", "Unit", "Total qty", "Rate", "GST %", "Amount without GST", "Amount with GST", ""].map((h, i) => (
+              <th key={i} className={`${th} relative`}>
+                {h}
+                {i < cols.length - 1 && (
+                  <span
+                    role="separator" aria-orientation="vertical" aria-label={`Drag to change the width of ${h || "this"} column`} data-testid={`col-handle-${i}`}
+                    onPointerDown={startResize(i)} onDoubleClick={() => onPrefs({ cols: null })}
+                    className="absolute top-0 -right-1 z-10 h-full w-2.5 cursor-col-resize touch-none select-none hover:bg-primary/40"
+                  />
+                )}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>

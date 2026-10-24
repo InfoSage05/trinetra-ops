@@ -202,3 +202,30 @@ test("a half-filled bill is kept when you change tab and come back, and cleared 
   await expect(page.getByTestId("draft-restored")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Choose customer…" })).toBeVisible();
 });
+
+test("any column of the sheet can be made wider or narrower by dragging its heading edge, like Excel", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Excel sheet" }).click();
+  await page.getByRole("button", { name: "Fit to screen" }).click();
+  await page.getByRole("button", { name: "Make the sheet smaller" }).click(); // leave room to grow
+
+  const heading = page.getByRole("columnheader", { name: /Description of goods/ });
+  const before = (await heading.boundingBox())!.width;
+  const handle = page.getByTestId("col-handle-1");
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await heading.boundingBox())!.width).toBeGreaterThan(before + 60);
+
+  // It is remembered after a reload; double-click the edge (or the button) to go back to the standard widths.
+  await page.reload();
+  await expect.poll(async () => (await page.getByRole("columnheader", { name: /Description of goods/ }).boundingBox())!.width).toBeGreaterThan(before + 60);
+  await page.getByRole("button", { name: "Reset column widths" }).click();
+  await expect.poll(async () => Math.abs((await page.getByRole("columnheader", { name: /Description of goods/ }).boundingBox())!.width - before)).toBeLessThan(2);
+  await page.getByRole("button", { name: "Cards" }).click();
+});
