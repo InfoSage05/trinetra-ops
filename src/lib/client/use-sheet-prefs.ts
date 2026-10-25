@@ -6,7 +6,7 @@ import { MAX_BILL_ITEMS } from "@/lib/limits";
 /** cols: the width in pixels of each of the 13 columns, or null for the standard widths. */
 export type SheetPrefs = { zoom: number; wide: boolean; rows: number; cols: number[] | null };
 export const DEFAULT_SHEET_PREFS: SheetPrefs = { zoom: 0, wide: true, rows: 12, cols: null };
-export const SHEET_COLUMNS = 14;
+export const SHEET_COLUMNS = 13;
 export const MIN_COL_WIDTH = 24;
 export const MIN_ZOOM = 50;
 export const MAX_ZOOM = 150;

@@ -66,7 +66,6 @@ test("GST rates are visible while making a bill, in both layouts", async ({ brow
   await expect(page.getByTestId("gst-rate-row").first()).toContainText("18%");
 
   await page.getByRole("button", { name: "Excel sheet" }).click();
-  await expect(page.getByTestId("sheet-gst-rate").first()).toHaveText("18%");
   await expect(page.getByTestId("gst-summary")).toContainText("GST rates on this bill");
   await page.getByRole("button", { name: "Cards" }).click(); // leave the saved preference as found
 });

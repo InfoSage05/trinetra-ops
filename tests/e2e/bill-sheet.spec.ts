@@ -165,12 +165,12 @@ test("amounts without and with GST appear as soon as quantity and rate are fille
   // One Total amount column (rate x quantity) with CGST, SGST and IGST beside it; no discount and no total-quantity column.
   await expect(page.getByRole("columnheader", { name: "Total amount" })).toBeVisible();
   for (const name of ["CGST", "SGST", "IGST"]) await expect(page.getByRole("columnheader", { name })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: /Discount|Total qty|with GST/ })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: /Discount|Total qty|with GST|^GST/ })).toHaveCount(0); // no separate GST % column either
 
   const rate = Number((await row.getByLabel("Rate", { exact: true }).getAttribute("placeholder"))!.replace(/,/g, ""));
   const ex = 2 * rate; // the rate shown is per patty and the quantity is 2 patty
   await expect(row.getByTestId("sheet-line-total")).toHaveText(ex.toLocaleString("en-IN", { minimumFractionDigits: 2 }));
-  const gst = Number((await row.getByTestId("sheet-gst-rate").innerText()).replace("%", ""));
+  const gst = 18; // the test items carry 18% GST
   const half = (Math.round((ex * gst) / 2) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 });
   await expect(row.getByTestId("sheet-cgst")).toHaveText(half);
   await expect(row.getByTestId("sheet-sgst")).toHaveText(half);
@@ -233,5 +233,30 @@ test("any column of the sheet can be made wider or narrower by dragging its head
   await expect.poll(async () => (await page.getByRole("columnheader", { name: /Description of goods/ }).boundingBox())!.width).toBeGreaterThan(before + 60);
   await page.getByRole("button", { name: "Reset column widths" }).click();
   await expect.poll(async () => Math.abs((await page.getByRole("columnheader", { name: /Description of goods/ }).boundingBox())!.width - before)).toBeLessThan(2);
+  await page.getByRole("button", { name: "Cards" }).click();
+});
+
+test("CGST and SGST fill together within the state, IGST alone for another state, never both", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await login(page, E2E_OWNER);
+  await page.goto("/billing/new");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Excel sheet" }).click();
+  const row = page.getByTestId("sheet-row").nth(0);
+  await row.getByLabel("Item").fill("sheet cand");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("2");
+
+  // Same state as the business: CGST and SGST, IGST blank.
+  await expect(row.getByTestId("sheet-cgst")).not.toHaveText("");
+  await expect(row.getByTestId("sheet-sgst")).not.toHaveText("");
+  await expect(row.getByTestId("sheet-igst")).toHaveText("");
+
+  // Goods going to another state: IGST only.
+  await page.getByRole("combobox", { name: /place of supply/i }).click();
+  await page.getByRole("option", { name: /Maharashtra/ }).click();
+  await expect(row.getByTestId("sheet-igst")).not.toHaveText("");
+  await expect(row.getByTestId("sheet-cgst")).toHaveText("");
+  await expect(row.getByTestId("sheet-sgst")).toHaveText("");
   await page.getByRole("button", { name: "Cards" }).click();
 });

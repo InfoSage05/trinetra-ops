@@ -36,7 +36,7 @@ type Props = {
 };
 
 // Standard column widths in pixels (before zooming). The owner can drag any of them wider or narrower, like in Excel.
-const DEFAULT_COLS = [4, 18, 5, 6, 6, 7, 7, 12, 5, 8, 8, 8, 10, 3].map((p) => Math.round(p * 9.8));
+const DEFAULT_COLS = [4, 20, 5, 6, 6, 7, 7, 12, 8, 8, 8, 10, 3].map((p) => Math.round(p * 9.8));
 const COL = { item: 0, cartons: 1, perCarton: 2, quantity: 3, unit: 4, rate: 5 } as const;
 const th = "border border-neutral-400 bg-neutral-100 px-1 py-1 text-center text-[11px] font-bold uppercase leading-tight";
 const td = "border border-neutral-300 px-1 py-0 align-middle";
@@ -229,7 +229,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "Patty per carton", "Quantity", "Unit", "Rate (per unit)", "GST %", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Patty per carton", "Quantity", "Unit", "Rate (per unit)", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
               <th key={i} className={`${th} relative`}>
                 {h}
                 {i < cols.length - 1 && (
@@ -284,7 +284,6 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                 <td className={td}>
                   {product && line ? <RateChoicePicker compact product={product} line={line} billTier={rateTier} cellName={cell("rate")} onKeyDown={keys(i, COL.rate)} onChange={(patch) => onEdit(i, patch)} /> : <input disabled aria-label="Rate" className="w-full bg-transparent px-1 py-1.5" />}
                 </td>
-                <td className={`${td} text-center`} data-testid="sheet-gst-rate">{product ? `${formatQuantity(product.gstRate)}%` : ""}</td>
                 <td className={num} data-testid="sheet-cgst">{rowMoney[i] && !interState ? formatAmount(rowMoney[i]!.cgst) : ""}</td>
                 <td className={num} data-testid="sheet-sgst">{rowMoney[i] && !interState ? formatAmount(rowMoney[i]!.sgst) : ""}</td>
                 <td className={num} data-testid="sheet-igst">{rowMoney[i] && interState ? formatAmount(rowMoney[i]!.igst) : ""}</td>
@@ -301,7 +300,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           <tr className="bg-neutral-50 font-bold">
             <td colSpan={3} className={`${td} px-2 py-1.5 text-right`}>TOTAL</td>
             <td className={num}>{anyAmount ? formatQuantity(totalCartons.toDecimalPlaces(2)) : ""}</td>
-            <td colSpan={5} className={td} />
+            <td colSpan={4} className={td} />
             <td className={num}>{anyAmount && !interState ? formatAmount(sumOf((m) => m.cgst)) : ""}</td>
             <td className={num}>{anyAmount && !interState ? formatAmount(sumOf((m) => m.sgst)) : ""}</td>
             <td className={num}>{anyAmount && interState ? formatAmount(sumOf((m) => m.igst)) : ""}</td>
@@ -315,7 +314,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
               <tr key={c.kind}>
                 <td colSpan={3} className={`${td} px-2 py-1 font-bold uppercase`}>{c.label}</td>
                 <td colSpan={2} className={`${td} px-2 text-right font-bold`}>AMOUNT</td>
-                <td colSpan={4} className={td}>
+                <td colSpan={3} className={td}>
                   <input id={`charge-${c.kind}`} aria-label={c.label} inputMode="decimal" placeholder="0.00" className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50"
                     value={charges[c.kind]} onChange={(e) => onCharges({ ...charges, [c.kind]: e.target.value })} onFocus={(e) => e.currentTarget.select()} />
                 </td>
@@ -330,7 +329,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
 
           {preview && !D(preview.roundOff).isZero() && (
             <tr>
-              <td colSpan={12} className={`${td} px-2 py-1 text-right font-bold`}>ROUND OFF</td>
+              <td colSpan={11} className={`${td} px-2 py-1 text-right font-bold`}>ROUND OFF</td>
               <td className={num}>{formatAmount(preview.roundOff)}</td>
               <td className={td} />
             </tr>
@@ -338,7 +337,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
           <tr className="bg-neutral-50">
             <td colSpan={3} className={`${td} px-2 py-2 font-bold`}>INVOICE VALUE (IN WORDS)</td>
             <td colSpan={6} className={`${td} px-2`}>{anyAmount ? amountInWords(grandTotal.toDecimalPlaces(0)) : ""}</td>
-            <td colSpan={3} className={`${td} px-2 text-right font-bold`}>{preview ? "GRAND TOTAL (with GST)" : "TOTAL with GST (before round off)"}</td>
+            <td colSpan={2} className={`${td} px-2 text-right font-bold`}>{preview ? "GRAND TOTAL (with GST)" : "TOTAL with GST (before round off)"}</td>
             <td className={`${num} text-base font-bold`} data-testid="sheet-grand-total">{anyAmount ? formatAmount(grandTotal) : ""}</td>
             <td className={td} />
           </tr>
