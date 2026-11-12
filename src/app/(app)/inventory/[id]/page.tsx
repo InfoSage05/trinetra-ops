@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/session";
-import { describeStock } from "@/lib/cartons";
+import { describeStockInPatty } from "@/lib/cartons";
 import { NotFoundError } from "@/lib/errors";
 import { formatINR, formatQuantity } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
@@ -24,14 +24,14 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
           <h1 className="flex flex-wrap items-center gap-x-2">{item.name} {isOwner && <RenameItem id={item.id} name={item.name} />}</h1>
-          <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} {item.unit} per carton{item.unitPrice ? ` · Rates: ${item.rateA ? `A ${formatINR(item.rateA.toString())} · ` : ""}B ${formatINR(item.unitPrice.toString())}${item.rateC ? ` · C ${formatINR(item.rateC.toString())}` : ""}` : ""}</p>
+          <p className="text-sm text-muted-foreground">{item.sku ? `${item.sku} · ` : ""}{item.qtyPerCarton} pieces per carton{item.unitPrice ? ` · Rates: ${item.rateA ? `A ${formatINR(item.rateA.toString())} · ` : ""}B ${formatINR(item.unitPrice.toString())}${item.rateC ? ` · C ${formatINR(item.rateC.toString())}` : ""}` : ""}</p>
         </div>
         {isOwner && <Link href={`/billing/new?product=${item.id}`} className={buttonVariants({ size: "lg" })}>Bill this item</Link>}
       </div>
 
       <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 shadow-[0_1px_2px_rgb(64_38_16/0.04)]">
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">In stock now</p>
-        <p className="mt-0.5 text-2xl font-bold tabular-nums" data-testid="item-stock">{describeStock(item.stock.toString(), item.qtyPerCarton)}</p>
+        <p className="mt-0.5 text-2xl font-bold tabular-nums" data-testid="item-stock">{describeStockInPatty(item.stock.toString(), item.qtyPerCarton)}</p>
         <div className="mt-2 flex gap-2">
           {item.status === "NEGATIVE" && <Badge variant="destructive">Oversold</Badge>}
           {item.status === "LOW" && <Badge variant="warning">Running low (warn at {formatQuantity(item.reorderLevel)})</Badge>}

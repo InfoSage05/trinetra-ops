@@ -33,9 +33,10 @@ export function gstinCheckCharacter(first14: string): string {
   return CHARSET[(36 - (sum % 36)) % 36];
 }
 
-export function isValidGstin(gstin: string): boolean {
+export function isValidGstin(gstin: string, options?: { requireChecksum?: boolean }): boolean {
   if (!GSTIN_PATTERN.test(gstin)) return false;
   if (!isValidStateCode(gstin.slice(0, 2))) return false;
+  if (options?.requireChecksum === false) return true;
   return gstinCheckCharacter(gstin.slice(0, 14)) === gstin[14];
 }
 
@@ -45,11 +46,13 @@ export function cleanGstin(value: string): string {
 }
 
 /** A plain-words reason a GSTIN is not accepted, or null when it is fine. */
-export function gstinProblem(gstin: string): string | null {
+export function gstinProblem(gstin: string, options?: { requireChecksum?: boolean }): string | null {
   if (gstin.length !== 15) return `A GSTIN has 15 characters; this has ${gstin.length}.`;
   if (!GSTIN_PATTERN.test(gstin)) return "A GSTIN looks like 21ABCDE1234F1Z5: 2 digits, 5 letters, 4 digits, 1 letter, then a letter or digit, then Z, then a letter or digit. Check for the letter O instead of zero, or the letter I instead of the digit 1.";
   if (!isValidStateCode(gstin.slice(0, 2))) return `${gstin.slice(0, 2)} is not a state code.`;
-  if (gstinCheckCharacter(gstin.slice(0, 14)) !== gstin[14]) return "The last character does not match the rest of the number, so there is a typo somewhere. Compare it with your registration certificate.";
+  if (options?.requireChecksum !== false && gstinCheckCharacter(gstin.slice(0, 14)) !== gstin[14]) {
+    return "The last character does not match the rest of the number, so there is a typo somewhere. Compare it with your registration certificate.";
+  }
   return null;
 }
 

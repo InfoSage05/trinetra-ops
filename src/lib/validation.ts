@@ -60,7 +60,7 @@ export const optionalGstin = z
   .transform((v) => (v ? cleanGstin(v) : undefined))
   .transform((v) => (v ? v : undefined))
   .superRefine((v, ctx) => {
-    const problem = v === undefined ? null : gstinProblem(v);
+    const problem = v === undefined ? null : gstinProblem(v, { requireChecksum: false });
     if (problem) ctx.addIssue({ code: "custom", message: problem });
   });
 

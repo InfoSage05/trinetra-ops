@@ -10,6 +10,7 @@ describe("gst", () => {
   it("validates GSTIN format and checksum", () => {
     expect(isValidGstin("27AAPFU0939F1ZV")).toBe(true);
     expect(isValidGstin("27AAPFU0939F1ZW")).toBe(false);
+    expect(isValidGstin("27AAPFU0939F1ZW", { requireChecksum: false })).toBe(true);
     expect(isValidGstin("27AAPFU0939F1V")).toBe(false);
     expect(isValidGstin("99AAPFU0939F1ZV")).toBe(false);
   });

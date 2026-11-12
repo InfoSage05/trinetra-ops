@@ -15,6 +15,16 @@ describe("validation", () => {
     expect(parseInput(schema, { qty: "1", amount: "5", mobile: "9876543210", gstin: "" }).gstin).toBeUndefined();
   });
 
+  it("accepts customer GSTIN even when checksum differs if format is valid", () => {
+    const out = parseInput(schema, { qty: "1", amount: "10", mobile: "9876543210", gstin: "21ASKPS3157F1ZY" });
+    expect(out.gstin).toBe("21ASKPS3157F1ZY");
+  });
+
+  it("still rejects structurally invalid customer GSTINs", () => {
+    expect(() => parseInput(schema, { qty: "1", amount: "10", mobile: "9876543210", gstin: "99ASKPS3157F1ZY" })).toThrow(ValidationError);
+    expect(() => parseInput(schema, { qty: "1", amount: "10", mobile: "9876543210", gstin: "21INVALID" })).toThrow(ValidationError);
+  });
+
   it("throws ValidationError with a readable message and field errors", () => {
     try {
       parseInput(schema, { qty: "0", amount: "5", mobile: "9876543210" });

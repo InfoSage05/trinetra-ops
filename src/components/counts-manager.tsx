@@ -9,7 +9,8 @@ import { approveStockCountAction, discardStockCountAction, submitStockCountActio
 import { callAction } from "@/lib/client/call-action";
 import { formatQuantity } from "@/lib/money";
 import { formatDateIN } from "@/lib/time";
-import { toPieces } from "@/lib/cartons";
+import { cartonsAndPattyToPieces, describeStockInPatty } from "@/lib/cartons";
+import { PATTY_PIECES } from "@/lib/units";
 
 type Item = { id: string; name: string; sku: string | null; qtyPerCarton: number };
 type Pending = { id: string; productName: string; countedQuantity: string; expectedQuantity: string; delta: string; countedAt: Date; movementsSinceCount: number; note: string | null };
@@ -25,7 +26,7 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
   const selected = items.find((i) => i.id === productId);
   // An empty or unreadable box must not be saved as "counted 0".
   const hasCount = [cartonsCounted, looseCounted].some((v) => v.trim() !== "") && [cartonsCounted, looseCounted].every((v) => v.trim() === "" || /^\d+(\.\d{1,2})?$/.test(v.trim()));
-  const countedPieces = toPieces(cartonsCounted, looseCounted, selected?.qtyPerCarton ?? 1);
+  const countedPieces = cartonsAndPattyToPieces(cartonsCounted, looseCounted, selected?.qtyPerCarton ?? 1);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,9 +53,11 @@ export function CountsManager({ items, pending, isOwner }: { items: Item[]; pend
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1"><Label htmlFor="cartonsCounted">Full cartons counted</Label><Input id="cartonsCounted" className="h-14 text-2xl" inputMode="decimal" value={cartonsCounted} onChange={(e) => setCartonsCounted(e.target.value)} /></div>
-              <div className="space-y-1"><Label htmlFor="looseCounted">Loose pieces counted</Label><Input id="looseCounted" className="h-14 text-2xl" inputMode="decimal" value={looseCounted} onChange={(e) => setLooseCounted(e.target.value)} /></div>
+              <div className="space-y-1"><Label htmlFor="looseCounted">Loose patty counted</Label><Input id="looseCounted" className="h-14 text-2xl" inputMode="decimal" value={looseCounted} onChange={(e) => setLooseCounted(e.target.value)} /></div>
             </div>
-            {selected && <p className="text-sm">1 carton = {selected.qtyPerCarton} pieces. Total counted: <b>{countedPieces}</b> pieces.</p>}
+            {selected && <p className="text-sm">{selected.qtyPerCarton >= PATTY_PIECES && selected.qtyPerCarton % PATTY_PIECES === 0
+              ? `1 carton = ${selected.qtyPerCarton / PATTY_PIECES} patty.`
+              : `Carton size is ${selected.qtyPerCarton} pieces; set patty per carton on Stock.`} Total counted: <b>{describeStockInPatty(countedPieces, selected.qtyPerCarton)}</b>.</p>}
             <div className="space-y-1"><Label htmlFor="note">Note (optional)</Label><Input id="note" className="h-11" value={note} onChange={(e) => setNote(e.target.value)} /></div>
             <Button type="submit" size="lg" className="h-12" disabled={busy || !productId || !hasCount}>Save count</Button>
           </form>
