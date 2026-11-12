@@ -16,7 +16,7 @@ import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
 import { GstSummary } from "@/components/gst-summary";
-import { CHARGE_FIELDS, QTY_UNITS, applyLineEdit, blankLine, cartonPieces, fromPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, applyLineEdit, blankLine, cartonPieces, fromPieces, linePieces, quantityPerCarton, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
 import { estimateLine, lineRate } from "@/components/bill-amounts";
@@ -69,13 +69,25 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
   const [deliveryAddress, setDeliveryAddress] = useState(saved?.deliveryAddress ?? "");
   const [notes, setNotes] = useState(saved?.notes ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
-    if (saved && saved.lines.length > 0) return saved.lines.map((l) => ({ ...blankLine(), ...l })); // new row ids, same contents
+    if (saved && saved.lines.length > 0) return saved.lines.map((savedLine) => {
+      const legacy = savedLine as typeof savedLine & { pattyPerCarton?: string };
+      const restored = {
+        ...blankLine(), ...savedLine,
+        unit: legacy.pattyPerCarton ? "patty" : savedLine.unit,
+        quantityPerCarton: savedLine.quantityPerCarton ?? legacy.pattyPerCarton ?? "",
+      };
+      const product = products.find((p) => p.id === restored.productId);
+      return product ? applyLineEdit(restored, { cartons: restored.cartons }, product) : restored;
+    }); // new row ids, same contents; carry forward drafts from the previous field name
     const fromOrder = (order?.lines ?? []).flatMap((l) => {
       const product = products.find((p) => p.id === l.productId);
       if (!product) return [];
       return [{ ...blankLine(product.id), ...fromPieces(l.pieces, product) }];
     });
-    return fromOrder.length > 0 ? fromOrder : [blankLine(initialProductId)];
+    if (fromOrder.length > 0) return fromOrder;
+    const initialLine = blankLine();
+    const initialProduct = products.find((p) => p.id === initialProductId);
+    return [initialProduct ? applyLineEdit(initialLine, { productId: initialProduct.id }, initialProduct) : initialLine];
   });
   const [charges, setCharges] = useState<Charges>(saved?.charges ?? { CARTON: "", CRATE: "", FREIGHT: "" });
   const [layout, setLayout] = useBillLayout();
@@ -103,8 +115,8 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
     ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: filledLines.map((l) => ({
       productId: l.productId,
-      quantity: pieceCount(l), // whatever it was typed in (cartons, patty, dozens, pieces), the bill is worked out in pieces
-      ...(l.pattyPerCarton.trim() ? { qtyPerCarton: cartonPieces(l, productOf(l)).toString() } : {}), // this line's own carton size
+      quantity: pieceCount(l), // the manually entered carton count multiplied by its configured quantity per carton
+      ...(l.quantityPerCarton.trim() ? { qtyPerCarton: cartonPieces(l, productOf(l)).toString() } : {}), // this line's own carton size, in pieces
       ...(l.unitPrice.trim() ? { unitPrice: lineRate(productOf(l)!, l, rateTier).toFixed(4) } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
@@ -284,15 +296,15 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                   {product && (
                     <>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="space-y-1"><Label>Quantity</Label><Input aria-label="Quantity" className="h-12 text-lg" inputMode="decimal" value={line.qty} onChange={(e) => update(line.rowId, { qty: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>No of cartons</Label><Input aria-label="Cartons" className="h-12 text-lg" inputMode="decimal" value={line.cartons} onChange={(e) => update(line.rowId, { cartons: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Quantity per carton</Label><Input aria-label="Quantity per carton" className="h-12 text-lg" inputMode="decimal" placeholder={formatQuantity(quantityPerCarton(line, product))} value={line.quantityPerCarton} onChange={(e) => update(line.rowId, { quantityPerCarton: e.target.value })} /></div>
+                        <div className="space-y-1"><Label>Total quantity</Label><Input aria-label="Total quantity" className="h-12 text-lg bg-muted" value={line.qty} readOnly /></div>
                         <div className="space-y-1">
                           <Label>Unit</Label>
                           <select aria-label="Unit" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 text-lg outline-none focus-visible:border-ring" value={line.unit} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); update(line.rowId, { unit: e.target.value as QtyUnit }); }}>
                             {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                           </select>
                         </div>
-                        <div className="space-y-1"><Label>No of cartons</Label><Input aria-label="Cartons" className="h-12 text-lg" inputMode="decimal" value={line.cartons} onChange={(e) => update(line.rowId, { cartons: e.target.value })} /></div>
-                        <div className="space-y-1"><Label>Patty in 1 carton</Label><Input aria-label="Patty per carton" className="h-12 text-lg" inputMode="decimal" placeholder={formatQuantity(D(product.qtyPerCarton).div(30).toDecimalPlaces(4))} value={line.pattyPerCarton} onChange={(e) => update(line.rowId, { pattyPerCarton: e.target.value })} /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div className="space-y-1"><Label>Rate per {QTY_UNITS.find((u) => u.value === line.unit)?.label.toLowerCase().replace(/s$/, "")}</Label><RateChoicePicker product={product} line={line} billTier={rateTier} onChange={(patch) => update(line.rowId, patch)} /></div>

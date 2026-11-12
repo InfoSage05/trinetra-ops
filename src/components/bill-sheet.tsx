@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
-import { CHARGE_FIELDS, QTY_UNITS, cartonPieces, linePieces, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, cartonPieces, linePieces, quantityPerCarton, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import type { RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
 import { estimateCharge, estimateLine, type LineMoney } from "@/components/bill-amounts";
@@ -229,7 +229,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "Patty per carton", "Quantity", "Unit", "Rate (per unit)", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Quantity per carton", "Total quantity", "Unit", "Rate (per unit)", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
               <th key={i} className={`${th} relative`}>
                 {h}
                 {i < cols.length - 1 && (
@@ -266,17 +266,17 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                     value={line?.cartons ?? ""} onChange={(e) => onEdit(i, { cartons: e.target.value })} onKeyDown={keys(i, COL.cartons)} onFocus={(e) => e.currentTarget.select()} />
                 </td>
                 <td className={td}>
-                  <input data-cell={cell("perCarton")} aria-label="Patty per carton" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed" data-testid="sheet-qty-per-carton"
-                    placeholder={product ? formatQuantity(D(product.qtyPerCarton).div(30).toDecimalPlaces(4)) : ""}
-                    value={line?.pattyPerCarton ?? ""} onChange={(e) => onEdit(i, { pattyPerCarton: e.target.value })} onKeyDown={keys(i, COL.perCarton)} onFocus={(e) => e.currentTarget.select()} />
+                  <input data-cell={cell("perCarton")} aria-label="Quantity per carton" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none placeholder:text-neutral-400 focus:bg-yellow-50 disabled:cursor-not-allowed" data-testid="sheet-qty-per-carton"
+                    placeholder={product && line ? formatQuantity(quantityPerCarton(line, product)) : ""}
+                    value={line?.quantityPerCarton ?? ""} onChange={(e) => onEdit(i, { quantityPerCarton: e.target.value })} onKeyDown={keys(i, COL.perCarton)} onFocus={(e) => e.currentTarget.select()} />
                 </td>
                 <td className={td}>
-                  <input data-cell={cell("quantity")} aria-label="Quantity" inputMode="decimal" disabled={!product} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
-                    value={line?.qty ?? ""} onChange={(e) => onEdit(i, { qty: e.target.value })} onKeyDown={keys(i, COL.quantity)} onFocus={(e) => e.currentTarget.select()} />
+                  <input data-cell={cell("quantity")} aria-label="Total quantity" disabled={!product} readOnly className="w-full bg-transparent px-1 py-1.5 text-right outline-none disabled:cursor-not-allowed"
+                    value={line?.qty ?? ""} onKeyDown={keys(i, COL.quantity)} onFocus={(e) => e.currentTarget.select()} />
                 </td>
                 <td className={td}>
                   <select data-cell={cell("unit")} aria-label="Unit" disabled={!product} className="w-full bg-transparent px-0.5 py-1.5 outline-none focus:bg-yellow-50 disabled:cursor-not-allowed"
-                    value={line?.unit ?? "carton"} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); onEdit(i, { unit: e.target.value as QtyUnit }); }}
+                    value={line?.unit ?? "piece"} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); onEdit(i, { unit: e.target.value as QtyUnit }); }}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusCell(i + 1, COL.item); } }}>
                     {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                   </select>
