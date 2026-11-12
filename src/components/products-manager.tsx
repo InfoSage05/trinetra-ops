@@ -14,9 +14,10 @@ import { assignCategoryAction } from "@/actions/categories";
 import { adjustRatesAction, createProductAction, deleteProductAction, importProductsAction, setAllGstRateAction, setProductActiveAction, updateProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatINR } from "@/lib/money";
+import { STOCK_UNITS, STOCK_UNIT_FACTOR, stockUnitLabel, cartonQuantityInUnit, cartonQuantityText, type StockMode, type StockUnit } from "@/lib/stock-units";
 
-type Product = { id: string; sku: string | null; name: string; size: string | null; categoryId: string | null; categoryName: string | null; unit: string; qtyPerCarton: number; hsnCode: string; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; reorderLevel: string; isActive: boolean };
-const EMPTY = { sku: "", name: "", size: "", categoryId: "", unit: "pcs", qtyPerCarton: "1", hsnCode: "", unitPrice: "", rateA: "", rateC: "", gstRate: "5", reorderLevel: "0" };
+type Product = { id: string; sku: string | null; name: string; size: string | null; categoryId: string | null; categoryName: string | null; unit: string; qtyPerCarton: number; stockUnit: StockUnit; stockMode: StockMode; hsnCode: string; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; reorderLevel: string; isActive: boolean };
+const EMPTY = { sku: "", name: "", size: "", categoryId: "", unit: "pcs", cartonQuantity: "", stockUnit: "PIECE" as StockUnit, stockMode: "CARTONS_AND_UNITS" as StockMode, hsnCode: "", unitPrice: "", rateA: "", rateC: "", gstRate: "5", reorderLevel: "0" };
 type Editing = typeof EMPTY & { id?: string };
 type ImportResult = { errors: { rowNumber: number; message: string }[]; toCreate: number; toUpdate: number; created: number; updated: number };
 
@@ -70,7 +71,10 @@ export function ProductsManager({ products, categories }: { products: Product[];
   async function save() {
     if (!editing) return;
     const { id, ...fields } = editing;
-    const done = await callAction(id ? updateProductAction({ id, ...fields }) : createProductAction(fields), { success: "Product saved" });
+    const { cartonQuantity, stockUnit, ...productFields } = fields;
+    const qtyPerCarton = cartonQuantity.trim() ? String(Math.round(Number(cartonQuantity) * STOCK_UNIT_FACTOR[stockUnit])) : "1";
+    const payload = { ...productFields, stockUnit, qtyPerCarton };
+    const done = await callAction(id ? updateProductAction({ id, ...payload }) : createProductAction(payload), { success: "Product saved" });
     if (done) { setEditing(null); router.refresh(); }
   }
 
@@ -142,9 +146,9 @@ export function ProductsManager({ products, categories }: { products: Product[];
                         <p className="font-medium">
                           {p.name} {p.size && <Badge variant="outline" data-testid="size-badge">Size {p.size}</Badge>} {!p.isActive && <Badge variant="secondary">Inactive</Badge>} {Number(p.unitPrice) === 0 && <Badge variant="destructive">Price not set</Badge>}
                         </p>
-                        <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}{p.qtyPerCarton} {p.unit}/carton · HSN {p.hsnCode} · GST {p.gstRate}% · Per piece: {p.rateA ? `A ${formatINR(p.rateA)} · ` : ""}B {formatINR(p.unitPrice)}{p.rateC ? ` · C ${formatINR(p.rateC)}` : ""} · Per patty (30 pcs): {p.rateA ? `A ${formatINR(Number(p.rateA) * 30)} · ` : ""}B {formatINR(Number(p.unitPrice) * 30)}{p.rateC ? ` · C ${formatINR(Number(p.rateC) * 30)}` : ""}</p>
+                        <p className="text-sm text-muted-foreground">{p.sku ? `${p.sku} · ` : ""}1 carton = {cartonQuantityText(p.qtyPerCarton, p.stockUnit)} {stockUnitLabel(p.stockUnit, cartonQuantityInUnit(p.qtyPerCarton, p.stockUnit))} · Stock: {p.stockMode === "UNIT_ONLY" ? `${stockUnitLabel(p.stockUnit)} only` : `cartons + ${stockUnitLabel(p.stockUnit)}`} · HSN {p.hsnCode} · GST {p.gstRate}% · Per piece: {p.rateA ? `A ${formatINR(p.rateA)} · ` : ""}B {formatINR(p.unitPrice)}{p.rateC ? ` · C ${formatINR(p.rateC)}` : ""} · Per patty (30 pcs): {p.rateA ? `A ${formatINR(Number(p.rateA) * 30)} · ` : ""}B {formatINR(Number(p.unitPrice) * 30)}{p.rateC ? ` · C ${formatINR(Number(p.rateC) * 30)}` : ""}</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", size: p.size ?? "", categoryId: p.categoryId ?? "", rateA: p.rateA ?? "", rateC: p.rateC ?? "", qtyPerCarton: String(p.qtyPerCarton) })}>Edit</Button>
+                      <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, sku: p.sku ?? "", size: p.size ?? "", categoryId: p.categoryId ?? "", rateA: p.rateA ?? "", rateC: p.rateC ?? "", cartonQuantity: p.qtyPerCarton === 1 ? "" : cartonQuantityText(p.qtyPerCarton, p.stockUnit) })}>Edit</Button>
                       <Button variant="ghost" size="sm" onClick={async () => { if (await callAction(setProductActiveAction({ id: p.id, isActive: !p.isActive }))) router.refresh(); }}>
                         {p.isActive ? "Deactivate" : "Activate"}
                       </Button>
@@ -194,7 +198,24 @@ export function ProductsManager({ products, categories }: { products: Product[];
               <Field id="rateA" label="Rate A: big wholesalers (optional)" inputMode="decimal" value={editing.rateA} onChange={(e) => setEditing({ ...editing, rateA: e.target.value })} hint="Lowest rate. Empty means same as B" />
               <Field id="rateC" label="Rate C: direct vendors (optional)" inputMode="decimal" value={editing.rateC} onChange={(e) => setEditing({ ...editing, rateC: e.target.value })} hint="Highest rate, like near Diwali. Empty means same as B" />
               <Field id="unit" label="Unit" value={editing.unit} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} />
-              <Field id="qpc-patty" label="Patty in one carton" inputMode="decimal" value={String(Number(editing.qtyPerCarton) / 30 || "")} onChange={(e) => setEditing({ ...editing, qtyPerCarton: e.target.value.trim() === "" ? "" : String(Math.round(Number(e.target.value) * 30)) })} hint={`1 patty = 30 pieces, so 1 carton = ${editing.qtyPerCarton || 0} pieces. It differs by item, for example 30 patty for one and 20 patty for another.`} />
+              <div className="space-y-1.5">
+                <label htmlFor="carton-quantity" className="text-sm font-medium">Quantity in one carton</label>
+                <div className="flex gap-2">
+                  <Input id="carton-quantity" inputMode="decimal" value={editing.cartonQuantity} onChange={(e) => setEditing({ ...editing, cartonQuantity: e.target.value })} />
+                  <select aria-label="Stock unit" className="h-12 rounded-lg border border-input bg-card px-2.5" value={editing.stockUnit} onChange={(e) => {
+                    const stockUnit = e.target.value as StockUnit;
+                    const pieces = Number(editing.cartonQuantity) * STOCK_UNIT_FACTOR[editing.stockUnit];
+                    setEditing({ ...editing, stockUnit, cartonQuantity: Number.isFinite(pieces) && pieces > 0 ? String(Number((pieces / STOCK_UNIT_FACTOR[stockUnit]).toFixed(2))) : editing.cartonQuantity });
+                  }}>
+                    {STOCK_UNITS.map((unit) => <option key={unit} value={unit}>{stockUnitLabel(unit)}</option>)}
+                  </select>
+                </div>
+                <select aria-label="Stock format" className="h-10 w-full rounded-lg border border-input bg-card px-2.5 text-sm" value={editing.stockMode} onChange={(e) => setEditing({ ...editing, stockMode: e.target.value as StockMode })}>
+                  <option value="CARTONS_AND_UNITS">Track cartons and loose {stockUnitLabel(editing.stockUnit)}</option>
+                  <option value="UNIT_ONLY">Track {stockUnitLabel(editing.stockUnit)} only (no cartons)</option>
+                </select>
+                <p className="text-xs text-muted-foreground">The carton contents and loose stock entry use the selected unit. Patty = 30 pieces; dozen = 12 pieces. Unit-only mode is useful for items counted just by dozen.</p>
+              </div>
               <Field id="hsn" label="HSN code" inputMode="numeric" value={editing.hsnCode} onChange={(e) => setEditing({ ...editing, hsnCode: e.target.value })} />
               <Field id="gst" label="GST %" inputMode="decimal" value={editing.gstRate} onChange={(e) => setEditing({ ...editing, gstRate: e.target.value })} hint="Confirm with your CA" />
               <Field id="reorder" label="Warn when stock falls to" inputMode="decimal" value={editing.reorderLevel} onChange={(e) => setEditing({ ...editing, reorderLevel: e.target.value })} />

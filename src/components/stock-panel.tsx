@@ -1,9 +1,10 @@
 "use client";
 import { Badge } from "@/components/ui/badge";
-import { describeStock } from "@/lib/cartons";
+import { describeStockInUnit } from "@/lib/cartons";
 import { D, formatQuantity } from "@/lib/money";
+import { cartonQuantityInUnit, cartonQuantityText, stockUnitLabel, type StockMode, type StockUnit } from "@/lib/stock-units";
 
-export type PanelProduct = { id: string; name: string; sku: string | null; unit: string; qtyPerCarton: number; reorderLevel: string; stock: string };
+export type PanelProduct = { id: string; name: string; sku: string | null; unit: string; qtyPerCarton: number; stockUnit: StockUnit; stockMode: StockMode; reorderLevel: string; stock: string };
 
 type Props = {
   product: PanelProduct | undefined;
@@ -32,9 +33,9 @@ export function StockBar({ product, availableNow, takingNow }: Omit<Props, "othe
     <div className={`rounded-lg bg-card px-3 py-2 text-sm shadow-md ring-1 ring-foreground/10 ${short ? "border-destructive" : ""}`} data-testid="stock-bar">
       <p className="truncate font-medium">{product.name}</p>
       <p>
-        In stock: <b>{describeStock(available.toString(), product.qtyPerCarton)}</b>
+        In stock: <b>{describeStockInUnit(available.toString(), product.qtyPerCarton, product.stockUnit, product.stockMode)}</b>
         {taking.greaterThan(0) && (
-          <> · After this bill: <b className={short ? "text-destructive" : low ? "text-warning-foreground" : ""}>{short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStock(left.toString(), product.qtyPerCarton)}</b></>
+          <> · After this bill: <b className={short ? "text-destructive" : low ? "text-warning-foreground" : ""}>{short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStockInUnit(left.toString(), product.qtyPerCarton, product.stockUnit, product.stockMode)}</b></>
         )}
       </p>
     </div>
@@ -53,19 +54,19 @@ export function StockPanel({ product, availableNow, takingNow, others }: Props) 
           <p className="font-medium">{product.name} {product.sku && <span className="text-sm text-muted-foreground">({product.sku})</span>}</p>
           <div>
             <p className="text-xs uppercase text-muted-foreground">In stock now</p>
-            <p className="text-lg font-semibold" data-testid="stock-now">{describeStock(available.toString(), product.qtyPerCarton)}</p>
-            <p className="text-xs text-muted-foreground">1 carton = {product.qtyPerCarton} {product.unit}</p>
+            <p className="text-lg font-semibold" data-testid="stock-now">{describeStockInUnit(available.toString(), product.qtyPerCarton, product.stockUnit, product.stockMode)}</p>
+            <p className="text-xs text-muted-foreground">Bill carton = {cartonQuantityText(product.qtyPerCarton, product.stockUnit)} {stockUnitLabel(product.stockUnit, cartonQuantityInUnit(product.qtyPerCarton, product.stockUnit))}</p>
           </div>
           {taking.greaterThan(0) && (
             <>
               <div>
                 <p className="text-xs uppercase text-muted-foreground">This bill takes</p>
-                <p className="font-medium">{describeStock(taking.toString(), product.qtyPerCarton)}</p>
+                <p className="font-medium">{describeStockInUnit(taking.toString(), product.qtyPerCarton, product.stockUnit, product.stockMode)}</p>
               </div>
               <div>
                 <p className="text-xs uppercase text-muted-foreground">Left after this bill</p>
                 <p className={`font-semibold ${short ? "text-destructive" : ""}`} data-testid="stock-left">
-                  {short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStock(left.toString(), product.qtyPerCarton)}
+                  {short ? `Short by ${formatQuantity(left.abs())} pcs` : describeStockInUnit(left.toString(), product.qtyPerCarton, product.stockUnit, product.stockMode)}
                 </p>
               </div>
             </>
@@ -86,7 +87,7 @@ export function StockPanel({ product, availableNow, takingNow, others }: Props) 
             {others.map((o) => (
               <li key={o.id} className="flex justify-between gap-2">
                 <span className="truncate">{o.name}</span>
-                <span className={`whitespace-nowrap ${D(o.stock).isNegative() ? "text-destructive" : "text-muted-foreground"}`}>{describeStock(o.stock, o.qtyPerCarton)}</span>
+                <span className={`whitespace-nowrap ${D(o.stock).isNegative() ? "text-destructive" : "text-muted-foreground"}`}>{describeStockInUnit(o.stock, o.qtyPerCarton, o.stockUnit, o.stockMode)}</span>
               </li>
             ))}
           </ul>

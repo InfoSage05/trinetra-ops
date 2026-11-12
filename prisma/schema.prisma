@@ -17,6 +17,17 @@ enum ActorType {
   AGENT
 }
 
+enum StockUnit {
+  PIECE
+  PATTY
+  DOZEN
+}
+
+enum StockMode {
+  CARTONS_AND_UNITS
+  UNIT_ONLY
+}
+
 /// Which of the three rates a customer is normally billed at: A big wholesalers, B normal wholesalers, C direct vendors.
 enum RateTier {
   A
@@ -121,6 +132,8 @@ model Product {
   name               String
   unit               String              @default("pcs")
   qtyPerCarton       Int                 @default(1)
+  stockUnit          StockUnit           @default(PIECE)
+  stockMode          StockMode           @default(CARTONS_AND_UNITS)
   /// A short size label shown beside the name, for example "12" or "3 x 14".
   size               String?
   categoryId         String?

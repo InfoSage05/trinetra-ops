@@ -22,7 +22,12 @@ export async function renameProductAction(input: unknown) {
 }
 
 export async function setCartonSizeAction(input: unknown) {
-  return runAction(async () => { const p = await setCartonSize(await getSession(), input); refresh(); revalidatePath("/orders"); return p; });
+  return runAction(async () => {
+    const p = await setCartonSize(await getSession(), input);
+    refresh();
+    for (const path of ["/orders", "/billing/new", "/reports", "/dashboard", "/inventory/counts"]) revalidatePath(path);
+    return p;
+  });
 }
 
 export async function quickEditProductAction(input: unknown) {

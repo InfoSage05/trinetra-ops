@@ -5,7 +5,8 @@ import { DomainError, NotFoundError } from "@/lib/errors";
 import { D, ZERO, round2, toFixed2 } from "@/lib/money";
 import type { Prisma } from "@/generated/prisma/client";
 import { RATE_TIERS, type RateTier } from "@/lib/rates";
-import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, positiveInt, requiredText } from "@/lib/validation";
+import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, positiveInt, quantity, requiredText } from "@/lib/validation";
+import { STOCK_UNITS, STOCK_MODES, STOCK_UNIT_FACTOR } from "@/lib/stock-units";
 
 /** An optional rate: empty means "not set" (the item then uses Rate B for that tier). */
 const optionalRate = z.preprocess((v) => (v === "" || v === null ? undefined : v), money.optional());
@@ -25,6 +26,8 @@ export const productSchema = z.object({
   categoryId: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().trim().min(1).optional()),
   unit: z.string().trim().min(1).max(20).default("pcs"),
   qtyPerCarton: positiveInt.default(1),
+  stockUnit: z.enum(STOCK_UNITS).default("PIECE"),
+  stockMode: z.enum(STOCK_MODES).default("CARTONS_AND_UNITS"),
   hsnCode,
   unitPrice: money,
   rateA: optionalRate,
@@ -83,13 +86,13 @@ export async function createProduct(session: Session | null, rawInput: unknown) 
 
 export async function updateProduct(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
-  const { id, ...input } = parseInput(productSchema.extend({ id: entityId }), rawInput);
+  const { id, ...input } = parseInput(productSchema.extend({ id: entityId, stockUnit: z.enum(STOCK_UNITS).optional(), stockMode: z.enum(STOCK_MODES).optional() }), rawInput);
   const current = await prisma.product.findUnique({ where: { id } });
   if (!current) throw new NotFoundError("Product");
   await assertSkuFree(input.sku, id);
   await assertNameFree(input.name, id);
   await assertCategoryExists(input.categoryId);
-  const data = toData(input);
+  const data = toData({ ...input, stockUnit: input.stockUnit ?? current.stockUnit, stockMode: input.stockMode ?? current.stockMode });
   return prisma.$transaction(async (tx) => {
     const updated = await tx.product.update({ where: { id }, data });
     await recordRateChanges(tx, id, ratesOf(current), ratesOf(updated), session.userId);
@@ -107,14 +110,23 @@ export async function renameProduct(session: Session | null, rawInput: unknown) 
 }
 
 /**
- * Sets how many pieces make one carton for this item. Stock is always kept in pieces, so only the way it is shown
- * (and how cartons typed on new bills and orders turn into pieces) changes. Bills already made keep their own figure.
+ * Sets the carton quantity and the unit used for loose stock entry/display. Stock stays in pieces; saved bills keep their own figure.
  */
 export async function setCartonSize(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
-  const { id, qtyPerCarton } = parseInput(z.object({ id: entityId, qtyPerCarton: positiveInt }), rawInput);
-  if (!(await prisma.product.findUnique({ where: { id } }))) throw new NotFoundError("Product");
-  return prisma.product.update({ where: { id }, data: { qtyPerCarton } });
+  const input = parseInput(z.object({
+    id: entityId,
+    qtyPerCarton: positiveInt.optional(),
+    cartonQuantity: quantity.optional(),
+    stockUnit: z.enum(STOCK_UNITS).optional(),
+    stockMode: z.enum(STOCK_MODES).optional(),
+  }).refine((v) => (v.qtyPerCarton !== undefined) !== (v.cartonQuantity !== undefined) || (v.qtyPerCarton === undefined && v.cartonQuantity === undefined && (v.stockUnit !== undefined || v.stockMode !== undefined)), "Enter the carton quantity or stock format."), rawInput);
+  const current = await prisma.product.findUnique({ where: { id: input.id } });
+  if (!current) throw new NotFoundError("Product");
+  const stockUnit = input.qtyPerCarton !== undefined ? "PIECE" : (input.stockUnit ?? current.stockUnit);
+  const stockMode = input.qtyPerCarton !== undefined ? "CARTONS_AND_UNITS" : (input.stockMode ?? current.stockMode);
+  const qtyPerCarton = input.qtyPerCarton ?? (input.cartonQuantity === undefined ? current.qtyPerCarton : parseInput(positiveInt, String(Math.round(Number(input.cartonQuantity) * STOCK_UNIT_FACTOR[stockUnit]))));
+  return prisma.product.update({ where: { id: input.id }, data: { qtyPerCarton, stockUnit, stockMode } });
 }
 
 /** For the quick-edit table: undefined = leave as is, "" = clear (Rate A and C only), a number = set. */

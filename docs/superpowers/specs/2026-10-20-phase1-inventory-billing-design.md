@@ -142,7 +142,12 @@ are used as direct inspiration for Sections 6 and 9 below.)
 - **`customers`** — id, name, phone, billing address, state (controlled GST state code, not free
   text), gstin (nullable, for B2B). Delivery/ship-to address is captured per bill (see below),
   since tax treatment depends on place of supply, not just the customer's stored billing state.
-- **`products`** — id, name, sku, unit, hsn_code, unit_price, gst_rate.
+- **`products`** — id, name, sku, billing unit, `qty_per_carton` stored as base pieces, `stock_unit`
+  (`piece` | `patty` | `dozen`), `stock_mode` (`cartons_and_units` | `unit_only`), hsn_code,
+  unit_price, gst_rate. Each product chooses its own carton quantity and stock-count unit, or
+  tracks stock only in pieces, patty or dozens. One patty is 30 pieces and one dozen is 12 pieces;
+  stock ledger quantities remain in pieces so bills and historical movements do not depend on
+  later display-unit changes.
 - **`invoice_number_counters`** — one row per financial year: `financial_year`, `next_serial`,
   `prefix`. Allocating a number is a single `UPDATE ... RETURNING` inside the bill's transaction
   (not a Postgres `SEQUENCE`, which is concurrency-safe but does not roll back on an aborted
@@ -307,8 +312,10 @@ authoritative for a given sale at any moment.** Concretely:
   shortcut and stock overview only.
 - **Billing** — customer select/create, delivery address, line items with live stock +
   overselling warning + shortfall capture, finalize → invoice generation, print view, PDF export.
-- **Inventory** — product list with live computed stock, search/filter, production-entry form,
-  manual adjustment form (reason required), opening-stock import.
+- **Inventory** — product list with live computed stock shown in each product's selected mode
+  (cartons plus loose quantities, or unit-only), search/filter, per-product carton quantity and
+  stock-unit settings, production-entry and manual adjustment forms (reason required),
+  opening-stock import.
 - **Stock count** — start a count session, enter counted quantities, submit for approval; owner
   approves, which posts the compensating adjustment.
 - **Customers** — list, create/edit, outstanding dues per customer.

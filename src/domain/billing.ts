@@ -281,7 +281,7 @@ export async function listBillableProducts(session: Session | null) {
   requireRole(session, ["OWNER"]);
   const products = await prisma.product.findMany({
     where: { isActive: true },
-    select: { id: true, sku: true, name: true, size: true, categoryId: true, category: { select: { name: true } }, unit: true, qtyPerCarton: true, reorderLevel: true, unitPrice: true, rateA: true, rateC: true, gstRate: true },
+    select: { id: true, sku: true, name: true, size: true, categoryId: true, category: { select: { name: true } }, unit: true, qtyPerCarton: true, stockUnit: true, stockMode: true, reorderLevel: true, unitPrice: true, rateA: true, rateC: true, gstRate: true },
     orderBy: { name: "asc" },
   });
   const levels = await getStockLevels(prisma, products.map((p) => p.id));

@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { ReportInsights } from "@/components/report-insights";
 import { getSession } from "@/lib/session";
 import { getLlmClient } from "@/lib/llm";
-import { describeStock } from "@/lib/cartons";
+import { describeStockInUnit } from "@/lib/cartons";
 import { DomainError } from "@/lib/errors";
 import { formatINR, formatQuantity } from "@/lib/money";
 import { istDateParts, istToday } from "@/lib/time";
@@ -82,7 +82,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           <h2 className="font-semibold">Stock movement</h2>
           <Table
             title="" head={["Item", "Opening", "Made", "Sold", "Returned", "Corrected", "Closing"]}
-            rows={movement.items.map((i) => [i.name, ...[i.opening, i.produced, i.sold, i.returned, i.adjusted].map((v) => formatQuantity(v)), describeStock(i.closing.toString(), i.qtyPerCarton)])}
+            rows={movement.items.map((i) => [i.name, ...[i.opening, i.produced, i.sold, i.returned, i.adjusted].map((v) => formatQuantity(v)), describeStockInUnit(i.closing.toString(), i.qtyPerCarton, i.stockUnit, i.stockMode)])}
           />
           <p className="text-xs text-muted-foreground">All quantities are in pieces except Closing, which also shows cartons.</p>
         </section>

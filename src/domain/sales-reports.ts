@@ -10,6 +10,7 @@ import { formatDateIN, istRange, istToday } from "@/lib/time";
 import { ValidationError } from "@/lib/errors";
 import { isoDate, parseInput } from "@/lib/validation";
 import { listOutstandingBills } from "@/domain/payments";
+import type { StockMode, StockUnit } from "@/lib/stock-units";
 
 /** Owner-only reports over a date range (IST days, both ends included). Totals are summed in the database. */
 
@@ -105,8 +106,8 @@ export async function getDuesAgeing(session: Session | null) {
 export async function getStockMovementReport(session: Session | null, rawInput: unknown) {
   requireRole(session, ["OWNER"]);
   const { from, to, start, end } = parseRange(rawInput);
-  const rows = await prisma.$queryRaw<{ id: string; name: string; qtyPerCarton: number; opening: string; produced: string; billed: string; returned: string; adjusted: string; closing: string }[]>(Prisma.sql`
-    SELECT p.id, p.name, p."qtyPerCarton",
+  const rows = await prisma.$queryRaw<{ id: string; name: string; qtyPerCarton: number; stockUnit: StockUnit; stockMode: StockMode; opening: string; produced: string; billed: string; returned: string; adjusted: string; closing: string }[]>(Prisma.sql`
+    SELECT p.id, p.name, p."qtyPerCarton", p."stockUnit", p."stockMode",
       COALESCE(SUM(l."quantityDelta") FILTER (WHERE l."createdAt" < ${start}), 0)::text AS opening,
       COALESCE(SUM(l."quantityDelta") FILTER (WHERE l."createdAt" >= ${start} AND l."createdAt" < ${end} AND l.type IN ('PRODUCED', 'OPENING')), 0)::text AS produced,
       COALESCE(SUM(l."quantityDelta") FILTER (WHERE l."createdAt" >= ${start} AND l."createdAt" < ${end} AND l.type = 'BILLED'), 0)::text AS billed,
@@ -115,11 +116,11 @@ export async function getStockMovementReport(session: Session | null, rawInput: 
       COALESCE(SUM(l."quantityDelta") FILTER (WHERE l."createdAt" < ${end}), 0)::text AS closing
     FROM products p LEFT JOIN stock_ledger l ON l."productId" = p.id
     WHERE p."isActive" = true
-    GROUP BY p.id, p.name, p."qtyPerCarton" ORDER BY p.name`);
+    GROUP BY p.id, p.name, p."qtyPerCarton", p."stockUnit", p."stockMode" ORDER BY p.name`);
   return {
     from, to,
     items: rows.map((r) => ({
-      id: r.id, name: r.name, qtyPerCarton: r.qtyPerCarton, opening: D(r.opening), produced: D(r.produced),
+      id: r.id, name: r.name, qtyPerCarton: r.qtyPerCarton, stockUnit: r.stockUnit, stockMode: r.stockMode, opening: D(r.opening), produced: D(r.produced),
       sold: D(r.billed).negated(), returned: D(r.returned), adjusted: D(r.adjusted), closing: D(r.closing),
     })),
   };

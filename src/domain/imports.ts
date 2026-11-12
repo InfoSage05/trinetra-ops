@@ -11,7 +11,7 @@ function pick(values: Record<string, string>, aliases: string[]): string | undef
   return undefined;
 }
 
-export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; size?: string; rateA?: string; rateC?: string; unit?: string; qtyPerCarton?: string; reorderLevel?: string };
+export type ProductRowInput = { rowNumber: number; sku?: string; name?: string; hsnCode?: string; gstRate?: string; unitPrice?: string; size?: string; rateA?: string; rateC?: string; unit?: string; qtyPerCarton?: string; stockUnit?: string; stockMode?: string; reorderLevel?: string };
 export type OpeningRowInput = { rowNumber: number; sku?: string; name?: string; quantity?: string };
 
 export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
@@ -27,6 +27,8 @@ export function mapProductRows(rows: SheetRow[]): ProductRowInput[] {
     rateC: pick(v, ["ratec", "pricec"]),
     unit: pick(v, ["unit", "uom"]),
     qtyPerCarton: pick(v, ["qtypercarton", "qtypercartoon", "piecespercarton", "pcspercarton", "pcspercartoon", "qtyperctn", "cartonsize", "cartonqty", "percarton"]),
+    stockUnit: pick(v, ["stockunit", "stockcountunit", "looseunit"]),
+    stockMode: pick(v, ["stockmode", "inventorymode"]),
     reorderLevel: pick(v, ["reorderlevel", "reorder", "minstock"]),
   }));
 }
@@ -50,7 +52,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   const { rows, dryRun } = parseInput(importProductsSchema, rawInput);
 
   const errors: { rowNumber: number; message: string }[] = [];
-  const valid: { data: z.output<typeof productSchema>; sizeGiven: boolean }[] = [];
+  const valid: { data: z.output<typeof productSchema>; sizeGiven: boolean; stockUnitGiven: boolean; stockModeGiven: boolean }[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
     const result = productSchema.safeParse(row);
@@ -72,7 +74,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
     }
     seen.add(key);
     // A price-list sheet with no carton column must not reset carton sizes the owner already set.
-    valid.push({ data: result.data, sizeGiven: String(row.qtyPerCarton ?? "").trim() !== "" });
+    valid.push({ data: result.data, sizeGiven: String(row.qtyPerCarton ?? "").trim() !== "", stockUnitGiven: String(row.stockUnit ?? "").trim() !== "", stockModeGiven: String(row.stockMode ?? "").trim() !== "" });
   }
 
   const [bySku, byName] = await Promise.all([
@@ -87,14 +89,14 @@ export async function importProducts(session: Session | null, rawInput: unknown)
   if (dryRun || errors.length > 0) return summary;
 
   await prisma.$transaction(async (tx) => {
-    for (const { data: p, sizeGiven, existingId } of planned) {
+    for (const { data: p, sizeGiven, stockUnitGiven, stockModeGiven, existingId } of planned) {
       const data = { ...p, sku: p.sku ?? null, rateA: p.rateA ? toFixed2(p.rateA) : null, rateC: p.rateC ? toFixed2(p.rateC) : null, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
       if (!existingId) {
         await tx.product.create({ data });
       } else {
-        const { qtyPerCarton, sku, ...rest } = data;
+        const { qtyPerCarton, sku, stockUnit, stockMode, ...rest } = data;
         // Keep the item's existing code when the sheet does not give one.
-        await tx.product.update({ where: { id: existingId }, data: { ...rest, ...(sizeGiven ? { qtyPerCarton } : {}), ...(sku ? { sku } : {}) } });
+        await tx.product.update({ where: { id: existingId }, data: { ...rest, ...(sizeGiven ? { qtyPerCarton } : {}), ...(stockUnitGiven ? { stockUnit } : {}), ...(stockModeGiven ? { stockMode } : {}), ...(sku ? { sku } : {}) } });
       }
     }
   });

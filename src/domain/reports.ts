@@ -20,14 +20,14 @@ export async function getStockOverview(session: Session | null, rawInput: unknow
       isActive: true,
       ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }] } : {}),
     },
-    select: { id: true, sku: true, name: true, size: true, categoryId: true, category: { select: { name: true } }, unit: true, qtyPerCarton: true, reorderLevel: true },
+    select: { id: true, sku: true, name: true, size: true, categoryId: true, category: { select: { name: true } }, unit: true, qtyPerCarton: true, stockUnit: true, stockMode: true, reorderLevel: true },
     orderBy: { name: "asc" },
   });
   const levels = await getStockLevels(prisma, products.map((p) => p.id));
   return products.map((p) => {
     const stock = levels.get(p.id) ?? ZERO;
     const status: StockStatus = stock.isNegative() ? "NEGATIVE" : stock.lessThanOrEqualTo(D(p.reorderLevel)) && D(p.reorderLevel).greaterThan(0) ? "LOW" : "OK";
-    return { id: p.id, sku: p.sku, name: p.name, size: p.size, categoryId: p.categoryId, categoryName: p.category?.name ?? null, unit: p.unit, qtyPerCarton: p.qtyPerCarton, stock, reorderLevel: D(p.reorderLevel), status };
+    return { id: p.id, sku: p.sku, name: p.name, size: p.size, categoryId: p.categoryId, categoryName: p.category?.name ?? null, unit: p.unit, qtyPerCarton: p.qtyPerCarton, stockUnit: p.stockUnit, stockMode: p.stockMode, stock, reorderLevel: D(p.reorderLevel), status };
   });
 }
 
@@ -155,7 +155,7 @@ export async function getProductDetail(session: Session | null, id: string) {
   const reorderLevel = D(product.reorderLevel);
   const status: StockStatus = stock.isNegative() ? "NEGATIVE" : reorderLevel.greaterThan(0) && stock.lessThanOrEqualTo(reorderLevel) ? "LOW" : "OK";
   return {
-    id: product.id, sku: product.sku, name: product.name, unit: product.unit, qtyPerCarton: product.qtyPerCarton,
+    id: product.id, sku: product.sku, name: product.name, unit: product.unit, qtyPerCarton: product.qtyPerCarton, stockUnit: product.stockUnit, stockMode: product.stockMode,
     reorderLevel, stock, status,
     unitPrice: session?.role === "OWNER" ? product.unitPrice : null,
     rateA: session?.role === "OWNER" ? product.rateA : null,
