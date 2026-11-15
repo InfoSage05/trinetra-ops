@@ -179,7 +179,6 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
     if (pl) return { ex: D(pl.taxableValue), inc: D(pl.lineTotal), cgst: D(pl.cgstAmount), sgst: D(pl.sgstAmount), igst: D(pl.igstAmount) };
     return estimateLine(products.find((p) => p.id === line.productId), line, rateTier, interState);
   });
-  const highestGst = lines.reduce((max, l) => { const p = products.find((x) => x.id === l.productId); return p && D(p.gstRate).greaterThan(max) ? D(p.gstRate) : max; }, D(0));
   const totalCartons = lines.reduce((s2, l) => {
     if (!l.productId || !l.cartons.trim()) return s2;
     try { const count = D(l.cartons); return count.greaterThan(0) ? s2.plus(count) : s2; } catch { return s2; }
@@ -188,7 +187,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
   const chargeAmount = (kind: keyof Charges) => kind === "CARTON" ? cartonCharge : charges[kind];
   const chargeMoney = new Map(CHARGE_FIELDS.map((c) => {
     const pc = preview?.charges.find((x) => x.kind === c.kind);
-    return [c.kind, pc ? { ex: D(pc.taxableValue), inc: D(pc.lineTotal), cgst: D(pc.cgstAmount), sgst: D(pc.sgstAmount), igst: D(pc.igstAmount) } : estimateCharge(chargeAmount(c.kind), c.kind === "CARTON" ? D(0) : highestGst, interState)] as const;
+    return [c.kind, pc ? { ex: D(pc.taxableValue), inc: D(pc.lineTotal), cgst: D(pc.cgstAmount), sgst: D(pc.sgstAmount), igst: D(pc.igstAmount) } : estimateCharge(chargeAmount(c.kind), D(0), interState)] as const;
   }));
   const sumOf = (pick: (m: LineMoney) => ReturnType<typeof D>) =>
     [...rowMoney, ...chargeMoney.values()].reduce((s2, m) => (m ? s2.plus(pick(m)) : s2), D(0));

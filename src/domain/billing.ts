@@ -140,12 +140,11 @@ export async function computeBill(db: Db, draft: BillDraft) {
     };
   });
 
-  // Packing/freight on a composite supply follow the principal supply, so by default they take the highest item rate.
-  const defaultChargeRate = lines.reduce((max, l) => Decimal.max(max, l.gstRate), ZERO);
+  // Business charges are added as entered; GST is not calculated on them.
   const charges: PreviewCharge[] = draft.charges.map((c, i) => {
     const taxableValue = D(c.amount);
     // Carton handling is a fixed ₹15-per-carton charge and is not taxed as a product charge.
-    const rate = c.kind === "CARTON" ? ZERO : D(c.gstRate ?? defaultChargeRate);
+    const rate = ZERO;
     const tax = taxOnTaxableValue(taxableValue, rate, interState);
     return {
       chargeNo: i + 1, kind: c.kind, label: c.label ?? CHARGE_LABELS[c.kind], taxableValue, gstRate: rate, ...tax,
@@ -154,7 +153,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
   });
 
   const preview: BillPreview = {
-    ...computeTotals([...lines, ...charges.map((c) => ({ ...c, grossAmount: c.taxableValue, discountAmount: ZERO }))]),
+    ...computeTotals([...lines, ...charges.map((c) => ({ ...c, grossAmount: c.taxableValue, discountAmount: ZERO }))], true),
     customerId: customer.id, customerName: customer.name,
     placeOfSupply: draft.placeOfSupply, placeOfSupplyName: stateName(draft.placeOfSupply),
     interState, rateTier, hasShortfall: lines.some((l) => l.shortfallQuantity !== null), lines, charges,

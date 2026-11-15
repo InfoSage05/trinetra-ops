@@ -39,25 +39,27 @@ export function computeLine(
     throw new ValidationError("Discount must be between 0 and the line amount.");
   }
   const amountAfterDiscount = grossAmount.minus(discountAmount);
-  const taxableValue = input.priceIncludesGst
-    ? round2(amountAfterDiscount.div(D(1).plus(D(input.gstRate).div(100))))
-    : amountAfterDiscount;
+  // Rates entered by this business are GST-inclusive. The CGST/SGST columns are
+  // informational percentages of the entered line amount and never change it.
+  const taxableValue = amountAfterDiscount;
   const tax = taxOnTaxableValue(taxableValue, input.gstRate, interState);
-  const lineTotal = input.priceIncludesGst
-    ? amountAfterDiscount
-    : taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount);
+  const lineTotal = input.priceIncludesGst ? amountAfterDiscount : taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount);
   return { grossAmount, discountAmount, taxableValue, ...tax, lineTotal };
 }
 
 export function computeTotals(
-  lines: Array<TaxSplit & { taxableValue: Decimal; grossAmount?: Decimal; discountAmount?: Decimal }>
+  lines: Array<TaxSplit & { taxableValue: Decimal; grossAmount?: Decimal; discountAmount?: Decimal }>,
+  taxAlreadyIncluded = false,
 ): DocumentTotals {
   const taxableTotal = sumDecimals(lines.map((l) => l.taxableValue));
   const cgstTotal = sumDecimals(lines.map((l) => l.cgstAmount));
   const sgstTotal = sumDecimals(lines.map((l) => l.sgstAmount));
   const igstTotal = sumDecimals(lines.map((l) => l.igstAmount));
   const taxTotal = cgstTotal.plus(sgstTotal).plus(igstTotal);
-  const { rounded, roundOff } = roundToRupee(taxableTotal.plus(taxTotal));
+  const amount = taxAlreadyIncluded
+    ? sumDecimals(lines.map((l) => D(l.grossAmount ?? l.taxableValue)))
+    : taxableTotal.plus(taxTotal);
+  const { rounded, roundOff } = roundToRupee(amount);
   return {
     grossTotal: sumDecimals(lines.map((l) => l.grossAmount ?? l.taxableValue)),
     discountTotal: sumDecimals(lines.map((l) => l.discountAmount ?? 0)),
