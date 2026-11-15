@@ -2,14 +2,14 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole, type Session } from "@/lib/auth";
 import { DomainError, NotFoundError } from "@/lib/errors";
-import { D, ZERO, round2, toFixed2 } from "@/lib/money";
+import { D, ZERO, toFixed2, toFixed4 } from "@/lib/money";
 import type { Prisma } from "@/generated/prisma/client";
 import { RATE_TIERS, type RateTier } from "@/lib/rates";
-import { entityId, gstRate, hsnCode, money, nonNegativeQuantity, parseInput, positiveInt, quantity, requiredText } from "@/lib/validation";
+import { entityId, gstRate, hsnCode, nonNegativeQuantity, parseInput, positiveInt, quantity, rate4, requiredText } from "@/lib/validation";
 import { STOCK_UNITS, STOCK_MODES, STOCK_UNIT_FACTOR } from "@/lib/stock-units";
 
 /** An optional rate: empty means "not set" (the item then uses Rate B for that tier). */
-const optionalRate = z.preprocess((v) => (v === "" || v === null ? undefined : v), money.optional());
+const optionalRate = z.preprocess((v) => (v === "" || v === null ? undefined : v), rate4.optional());
 
 export const productSchema = z.object({
   // The item code is optional: the name is enough to tell items apart.
@@ -29,7 +29,7 @@ export const productSchema = z.object({
   stockUnit: z.enum(STOCK_UNITS).default("PIECE"),
   stockMode: z.enum(STOCK_MODES).default("CARTONS_AND_UNITS"),
   hsnCode,
-  unitPrice: money,
+  unitPrice: rate4,
   rateA: optionalRate,
   rateC: optionalRate,
   gstRate,
@@ -42,7 +42,7 @@ export function tidyName(name: string): string {
 }
 
 function toData(input: z.output<typeof productSchema>) {
-  return { ...input, sku: input.sku ?? null, size: input.size ?? null, categoryId: input.categoryId ?? null, unitPrice: toFixed2(input.unitPrice), rateA: input.rateA ? toFixed2(input.rateA) : null, rateC: input.rateC ? toFixed2(input.rateC) : null, gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
+  return { ...input, sku: input.sku ?? null, size: input.size ?? null, categoryId: input.categoryId ?? null, unitPrice: toFixed4(input.unitPrice), rateA: input.rateA ? toFixed4(input.rateA) : null, rateC: input.rateC ? toFixed4(input.rateC) : null, gstRate: toFixed2(input.gstRate), reorderLevel: toFixed2(input.reorderLevel) };
 }
 
 async function assertSkuFree(sku: string | undefined, exceptId?: string) {
@@ -130,7 +130,7 @@ export async function setCartonSize(session: Session | null, rawInput: unknown) 
 }
 
 /** For the quick-edit table: undefined = leave as is, "" = clear (Rate A and C only), a number = set. */
-const rateEdit = z.preprocess((v) => (v === "" ? null : v), money.nullable().optional());
+const rateEdit = z.preprocess((v) => (v === "" ? null : v), rate4.nullable().optional());
 
 /**
  * Changes the name and/or any of the three rates (A, B, C) of one item in a single step. Only future bills use a new
@@ -142,7 +142,7 @@ export async function quickEditProduct(session: Session | null, rawInput: unknow
     z.object({
       id: entityId,
       name: requiredText("Name", 120).transform(tidyName).optional(),
-      unitPrice: money.optional(), // Rate B
+      unitPrice: rate4.optional(), // Rate B, normalized per piece
       rateA: rateEdit,
       rateC: rateEdit,
       reason: z.string().trim().max(200).optional(),
@@ -157,9 +157,9 @@ export async function quickEditProduct(session: Session | null, rawInput: unknow
       where: { id: input.id },
       data: {
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.unitPrice !== undefined ? { unitPrice: toFixed2(input.unitPrice) } : {}),
-        ...(input.rateA !== undefined ? { rateA: input.rateA === null ? null : toFixed2(input.rateA) } : {}),
-        ...(input.rateC !== undefined ? { rateC: input.rateC === null ? null : toFixed2(input.rateC) } : {}),
+        ...(input.unitPrice !== undefined ? { unitPrice: toFixed4(input.unitPrice) } : {}),
+        ...(input.rateA !== undefined ? { rateA: input.rateA === null ? null : toFixed4(input.rateA) } : {}),
+        ...(input.rateC !== undefined ? { rateC: input.rateC === null ? null : toFixed4(input.rateC) } : {}),
       },
     });
     await recordRateChanges(tx, input.id, ratesOf(current), ratesOf(updated), session.userId, input.reason);
@@ -185,7 +185,7 @@ export async function adjustRates(session: Session | null, rawInput: unknown) {
   const factor = D(100).plus(D(input.percent)).div(100);
   const tiers = new Set<RateTier>(input.tiers);
   // A rate that is not set (or is zero) is left alone.
-  const bump = (rate: string | null) => (rate === null || D(rate).lessThanOrEqualTo(ZERO) ? rate : round2(D(rate).times(factor)).toFixed(2));
+  const bump = (rate: string | null) => (rate === null || D(rate).lessThanOrEqualTo(ZERO) ? rate : toFixed4(D(rate).times(factor)));
   return prisma.$transaction(async (tx) => {
     const items = await tx.product.findMany({ where: { isActive: true } });
     let changedItems = 0;

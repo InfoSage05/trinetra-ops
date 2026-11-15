@@ -7,10 +7,19 @@ import { Input } from "@/components/ui/input";
 import { quickEditProductAction } from "@/actions/products";
 import { callAction } from "@/lib/client/call-action";
 import { formatQuantity } from "@/lib/money";
+import { D, toFixed4 } from "@/lib/money";
+import { DOZEN_PIECES, PATTY_PIECES } from "@/lib/units";
 
 type Item = { id: string; name: string; qtyPerCarton: number; size: string | null; categoryId: string | null; categoryName: string | null; unitPrice: string; rateA: string | null; rateC: string | null; gstRate: string; unit: string; isActive: boolean };
 
-const show = (v: string | null) => (v === null || Number(v) === 0 ? "" : Number(v).toFixed(2));
+const show = (v: string | null) => (v === null || Number(v) === 0 ? "" : Number(v).toFixed(4).replace(/0+$/, "").replace(/\.$/, ""));
+const RATE_UNITS = [
+  { key: "patty", label: "Patty", pieces: PATTY_PIECES },
+  { key: "dozen", label: "Dozen", pieces: DOZEN_PIECES },
+  { key: "piece", label: "Piece", pieces: 1 },
+] as const;
+type Tier = "A" | "B" | "C";
+type RateUnit = (typeof RATE_UNITS)[number]["key"];
 
 /** One row of the rates table: the name and the three rates (A, B, C), then Save. */
 function RateRow({ item }: { item: Item }) {
@@ -19,8 +28,8 @@ function RateRow({ item }: { item: Item }) {
   const [name, setName] = useState(item.name);
   const [rates, setRates] = useState(shown);
   const [busy, setBusy] = useState(false);
-  // What was typed in a Carton box (null = show the worked-out figure). Stored rates are always per piece.
-  const [cartonTyped, setCartonTyped] = useState<{ A: string | null; B: string | null; C: string | null }>({ A: null, B: null, C: null });
+  // Rates are saved per piece; these fields let the owner enter the same rate per patty, dozen or piece.
+  const [typed, setTyped] = useState<Record<Tier, Partial<Record<RateUnit, string>>>>({ A: {}, B: {}, C: {} });
   const changedName = name.trim() !== item.name;
   // Rate B must have a number; A and C may be emptied to mean "same as Rate B".
   const changed = {
@@ -46,34 +55,30 @@ function RateRow({ item }: { item: Item }) {
     if (ok) router.refresh();
   }
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && anyChange && !busy) void save(); };
-  const PATTY = 30; // 1 patty = 30 pieces
-  const qpc = PATTY;
-  const cartonOf = (piece: string) => {
-    const n = Number(piece);
-    return piece.trim() === "" || !Number.isFinite(n) ? "" : (n * qpc).toFixed(2);
+  const setRate = (tier: Tier, unit: RateUnit, value: string) => {
+    const factor = RATE_UNITS.find((u) => u.key === unit)!.pieces;
+    let perPiece = "";
+    if (value.trim()) {
+      try { perPiece = toFixed4(D(value.trim().replace(/,/g, "")).div(factor)); } catch { perPiece = ""; }
+    }
+    setRates({ ...rates, [tier]: perPiece });
+    setTyped({ ...typed, [tier]: { [unit]: value } });
   };
-  const setPiece = (tier: "A" | "B" | "C", value: string) => { setRates({ ...rates, [tier]: value }); setCartonTyped({ ...cartonTyped, [tier]: null }); };
-  const setCarton = (tier: "A" | "B" | "C", value: string) => {
-    const n = Number(value);
-    setCartonTyped({ ...cartonTyped, [tier]: value });
-    setRates({ ...rates, [tier]: value.trim() === "" || !Number.isFinite(n) ? "" : (n / qpc).toFixed(2) });
-  };
-  const rateBox = (tier: "A" | "B" | "C", label: string, placeholder: string) => {
-    const roundedCarton = cartonOf(rates[tier]);
-    const typed = cartonTyped[tier];
-    const off = typed !== null && typed.trim() !== "" && roundedCarton !== "" && Math.abs(Number(typed) - Number(roundedCarton)) >= 0.005;
+  const rateBox = (tier: Tier, label: string, placeholder: string) => {
     return (
       <div className="rounded-lg border bg-muted/30 p-2" data-testid={`rate-box-${tier}`}>
         <p className="mb-1 text-xs font-semibold text-muted-foreground">{label}</p>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Patty ₹</span>
-          <Input aria-label={`Per patty ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
-            value={typed ?? roundedCarton} onChange={(e) => setCarton(tier, e.target.value)} onKeyDown={onEnter} />
-          <span className="text-xs text-muted-foreground">Piece ₹</span>
-          <Input aria-label={`Rate ${tier} of ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
-            value={rates[tier]} onChange={(e) => setPiece(tier, e.target.value)} onKeyDown={onEnter} />
+          {RATE_UNITS.map((unit) => {
+            const perUnit = rates[tier].trim() ? D(rates[tier]).times(unit.pieces).toDecimalPlaces(2).toFixed(2) : "";
+            return <label key={unit.key} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {unit.label} ₹
+              <Input aria-label={`Per ${unit.label.toLowerCase()} ${tier} for ${item.name}`} inputMode="decimal" placeholder={placeholder} className="h-10 w-24 text-right"
+                value={typed[tier][unit.key] ?? perUnit} onChange={(e) => setRate(tier, unit.key, e.target.value)} onKeyDown={onEnter} />
+            </label>;
+          })}
         </div>
-        {off && <p className="mt-1 text-xs text-amber-700">Saved per piece as ₹{rates[tier]}, so a patty works out to ₹{roundedCarton}.</p>}
+        <p className="mt-1 text-xs text-muted-foreground">Saved as a per-piece rate for accurate billing.</p>
       </div>
     );
   };
@@ -83,7 +88,7 @@ function RateRow({ item }: { item: Item }) {
       {item.size && <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="size-badge">Size {item.size}</span>}
       <Input aria-label={`Name of ${item.name}`} className="h-11 min-w-0 flex-1 basis-56" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onEnter} />
       <div className="flex w-full flex-wrap gap-2">
-        {rateBox("A", `Rate A · big wholesalers (1 patty = 30 pcs)`, "as B")}
+        {rateBox("A", "Rate A · big wholesalers", "as B")}
         {rateBox("B", "Rate B · normal wholesalers", "not set")}
         {rateBox("C", "Rate C · direct vendors", "as B")}
       </div>
@@ -108,7 +113,7 @@ export function RatesTable({ items, categories }: { items: Item[]; categories: {
   return (
     <div className="space-y-3" data-testid="rates-table">
       <p className="text-sm text-muted-foreground">
-        Every item has three rates (price before GST). <b>A</b> is for big wholesalers who take a huge quantity (lowest). <b>B</b> is for normal wholesalers (the standard rate). <b>C</b> is for direct vendors who take a little, like near Diwali (highest). Leave A or C empty to use the B rate. You can also change an item&apos;s name here. New bills use the new rates; bills already made keep the old ones.
+        Enter each GST-inclusive rate per piece, dozen, or patty; the bill extracts the GST from that amount and converts it to the quantity unit you choose on the line. <b>A</b> is for big wholesalers (lowest), <b>B</b> is the standard rate, and <b>C</b> is for direct vendors (highest). Leave A or C empty to use B. New bills use updated rates; saved bills keep their original rates.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Input placeholder="Search item, size or category" className="h-11 max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} />

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole, type Session } from "@/lib/auth";
 import type { SheetRow } from "@/lib/spreadsheet";
-import { toFixed2 } from "@/lib/money";
+import { toFixed2, toFixed4 } from "@/lib/money";
 import { parseInput } from "@/lib/validation";
 import { productSchema } from "@/domain/products";
 
@@ -90,7 +90,7 @@ export async function importProducts(session: Session | null, rawInput: unknown)
 
   await prisma.$transaction(async (tx) => {
     for (const { data: p, sizeGiven, stockUnitGiven, stockModeGiven, existingId } of planned) {
-      const data = { ...p, sku: p.sku ?? null, rateA: p.rateA ? toFixed2(p.rateA) : null, rateC: p.rateC ? toFixed2(p.rateC) : null, unitPrice: toFixed2(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
+      const data = { ...p, sku: p.sku ?? null, rateA: p.rateA ? toFixed4(p.rateA) : null, rateC: p.rateC ? toFixed4(p.rateC) : null, unitPrice: toFixed4(p.unitPrice), gstRate: toFixed2(p.gstRate), reorderLevel: toFixed2(p.reorderLevel) };
       if (!existingId) {
         await tx.product.create({ data });
       } else {

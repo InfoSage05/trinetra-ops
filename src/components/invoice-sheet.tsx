@@ -15,7 +15,7 @@ export function InvoiceSheet({ view, qrs }: Props) {
   const blankRows = Math.max(0, MIN_ROWS - view.lines.length);
   const charge = (kind: string) => view.charges.find((c) => c.kind === kind);
   const chargeRows: { label: string; kind: string }[] = [
-    { label: "TOTAL CARTON CHARGES", kind: "CARTON" },
+    { label: "TOTAL CARTON CHARGES (₹15 PER CARTON)", kind: "CARTON" },
     { label: "EXTRA CRATE CHARGES", kind: "CRATE" },
     { label: "FREIGHT CHARGES", kind: "FREIGHT" },
   ];
@@ -134,14 +134,6 @@ export function InvoiceSheet({ view, qrs }: Props) {
             </td>
             <td colSpan={6} className={cell}>
               <div className="flex flex-col gap-2">
-                <div>
-                  <p className="font-bold">Tax summary</p>
-                  {view.taxSummary.map((r) => (
-                    <p key={`${r.hsnCode}-${r.gstRate}`}>
-                      {r.hsnCode} @ {r.gstRate}%: {formatAmount(r.taxableValue)} + tax {formatAmount(Number(r.cgstAmount) + Number(r.sgstAmount) + Number(r.igstAmount))}
-                    </p>
-                  ))}
-                </div>
                 <div className="flex flex-wrap gap-2">
                   {/* eslint-disable @next/next/no-img-element -- QR codes are inline data URLs */}
                   {qrs.irnQr && <figure className="text-center"><img src={qrs.irnQr} alt="e-invoice QR" className="h-20 w-20" /><figcaption className="text-[9px]">e-Invoice</figcaption></figure>}

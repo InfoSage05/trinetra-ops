@@ -122,7 +122,7 @@ export async function computeBill(db: Db, draft: BillDraft) {
     const unitPrice = line.unitPrice !== undefined ? D(line.unitPrice) : rateFor(product, line.rateTier ?? rateTier);
     let amounts: LineAmounts;
     try {
-      amounts = computeLine({ quantity: qty, unitPrice, discountAmount: line.discountAmount, gstRate: product.gstRate }, interState);
+      amounts = computeLine({ quantity: qty, unitPrice, discountAmount: line.discountAmount, gstRate: product.gstRate, priceIncludesGst: true }, interState);
     } catch (error) {
       if (error instanceof ValidationError) throw new ValidationError(`Line ${index + 1} (${product.name}): ${error.message}`);
       throw error;
@@ -144,7 +144,8 @@ export async function computeBill(db: Db, draft: BillDraft) {
   const defaultChargeRate = lines.reduce((max, l) => Decimal.max(max, l.gstRate), ZERO);
   const charges: PreviewCharge[] = draft.charges.map((c, i) => {
     const taxableValue = D(c.amount);
-    const rate = D(c.gstRate ?? defaultChargeRate);
+    // Carton handling is a fixed ₹15-per-carton charge and is not taxed as a product charge.
+    const rate = c.kind === "CARTON" ? ZERO : D(c.gstRate ?? defaultChargeRate);
     const tax = taxOnTaxableValue(taxableValue, rate, interState);
     return {
       chargeNo: i + 1, kind: c.kind, label: c.label ?? CHARGE_LABELS[c.kind], taxableValue, gstRate: rate, ...tax,

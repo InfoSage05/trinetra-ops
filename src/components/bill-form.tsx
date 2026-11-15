@@ -15,7 +15,6 @@ import { ProductPicker, type BillableProduct } from "@/components/product-picker
 import { StateSelect } from "@/components/state-select";
 import { StockBar, StockPanel } from "@/components/stock-panel";
 import { BillSheet } from "@/components/bill-sheet";
-import { GstSummary } from "@/components/gst-summary";
 import { CHARGE_FIELDS, QTY_UNITS, applyLineEdit, blankLine, cartonPieces, fromPieces, linePieces, quantityPerCarton, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import { RATE_TIERS, RATE_TIER_LABELS, type RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
@@ -105,6 +104,11 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
 
   const productOf = (l: Line) => products.find((p) => p.id === l.productId);
   const pieceCount = (l: Line) => linePieces(l, productOf(l));
+  const cartonCharge = lines.reduce((sum, line) => {
+    if (!line.productId || !line.cartons.trim()) return sum;
+    try { const count = D(line.cartons); return count.greaterThan(0) ? sum.plus(count) : sum; } catch { return sum; }
+  }, D(0)).times(15).toFixed(2);
+  const chargeAmount = (kind: keyof Charges) => kind === "CARTON" ? cartonCharge : charges[kind];
   // A line counts once it has an item and a quantity; half-filled rows must not make the preview error out.
   const filledLines = lines.filter((l) => l.productId && D(pieceCount(l)).greaterThan(0));
   const draft = {
@@ -120,7 +124,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
       ...(l.unitPrice.trim() ? { unitPrice: lineRate(productOf(l)!, l, rateTier).toFixed(4) } : l.rateChoice !== "bill" ? { rateTier: l.rateChoice } : {}),
       ...(l.discountAmount ? { discountAmount: l.discountAmount } : {}),
     })),
-    charges: CHARGE_FIELDS.filter((c) => charges[c.kind].trim() !== "" && Number(charges[c.kind]) !== 0).map((c) => ({ kind: c.kind, amount: charges[c.kind].trim() })),
+    charges: CHARGE_FIELDS.filter((c) => chargeAmount(c.kind).trim() !== "" && Number(chargeAmount(c.kind)) !== 0).map((c) => ({ kind: c.kind, amount: chargeAmount(c.kind).trim() })),
   };
   const draftJson = JSON.stringify(draft);
 
@@ -300,7 +304,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                         <div className="space-y-1"><Label>Quantity per carton</Label><Input aria-label="Quantity per carton" className="h-12 text-lg" inputMode="decimal" placeholder={formatQuantity(quantityPerCarton(line, product))} value={line.quantityPerCarton} onChange={(e) => update(line.rowId, { quantityPerCarton: e.target.value })} /></div>
                         <div className="space-y-1"><Label>Total quantity</Label><Input aria-label="Total quantity" className="h-12 text-lg bg-muted" value={line.qty} readOnly /></div>
                         <div className="space-y-1">
-                          <Label>Unit</Label>
+                          <Label>Unit for quantity</Label>
                           <select aria-label="Unit" className="h-12 w-full rounded-lg border border-input bg-card px-2.5 text-lg outline-none focus-visible:border-ring" value={line.unit} onChange={(e) => { rememberUnit(e.target.value as QtyUnit); update(line.rowId, { unit: e.target.value as QtyUnit }); }}>
                             {QTY_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                           </select>
@@ -327,8 +331,6 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
             </>
           )}
 
-          <GstSummary preview={preview} />
-
           <Card><CardContent className="space-y-3 pt-6">
             {layout === "cards" && (
               <>
@@ -337,7 +339,7 @@ function BillFormInner({ products, businessStateCode, initialCustomer = null, in
                   {CHARGE_FIELDS.map((c) => (
                     <div key={c.kind} className="space-y-1">
                       <Label htmlFor={`charge-${c.kind}`} className="text-sm">{c.label}</Label>
-                      <Input id={`charge-${c.kind}`} className="h-12" inputMode="decimal" placeholder="0.00" value={charges[c.kind]} onChange={(e) => setCharges({ ...charges, [c.kind]: e.target.value })} />
+                      <Input id={`charge-${c.kind}`} className="h-12" inputMode="decimal" placeholder="0.00" value={chargeAmount(c.kind)} readOnly={c.kind === "CARTON"} onChange={(e) => setCharges({ ...charges, [c.kind]: e.target.value })} />
                     </div>
                   ))}
                 </div>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { BillableProduct } from "@/components/product-picker";
-import { CHARGE_FIELDS, QTY_UNITS, cartonPieces, linePieces, quantityPerCarton, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
+import { CHARGE_FIELDS, QTY_UNITS, quantityPerCarton, rememberUnit, type Charges, type Line, type QtyUnit } from "@/components/bill-lines";
 import type { RateTier } from "@/lib/rates";
 import { RateChoicePicker } from "@/components/rate-choice";
 import { estimateCharge, estimateLine, type LineMoney } from "@/components/bill-amounts";
@@ -108,7 +108,7 @@ function ItemCell({ product, products, dataCell, onPick, onNext, onFocusRow, onA
               onMouseDown={(e) => { e.preventDefault(); pick(p); onNext(); }}
             >
               <span className="min-w-0">{p.name}{p.size && <span className="text-muted-foreground"> · size {p.size}</span>}{p.categoryName && <span className="text-muted-foreground"> · {p.categoryName}</span>}</span>
-              <span className="shrink-0 text-sm text-muted-foreground">₹{formatQuantity(p.unitPrice)} + GST {formatQuantity(p.gstRate)}%</span>
+              <span className="shrink-0 text-sm text-muted-foreground">₹{formatQuantity(p.unitPrice)} / piece + GST {formatQuantity(p.gstRate)}%</span>
             </li>
           ))}
         </ul>,
@@ -180,14 +180,19 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
     return estimateLine(products.find((p) => p.id === line.productId), line, rateTier, interState);
   });
   const highestGst = lines.reduce((max, l) => { const p = products.find((x) => x.id === l.productId); return p && D(p.gstRate).greaterThan(max) ? D(p.gstRate) : max; }, D(0));
+  const totalCartons = lines.reduce((s2, l) => {
+    if (!l.productId || !l.cartons.trim()) return s2;
+    try { const count = D(l.cartons); return count.greaterThan(0) ? s2.plus(count) : s2; } catch { return s2; }
+  }, D(0));
+  const cartonCharge = totalCartons.times(15).toFixed(2);
+  const chargeAmount = (kind: keyof Charges) => kind === "CARTON" ? cartonCharge : charges[kind];
   const chargeMoney = new Map(CHARGE_FIELDS.map((c) => {
     const pc = preview?.charges.find((x) => x.kind === c.kind);
-    return [c.kind, pc ? { ex: D(pc.taxableValue), inc: D(pc.lineTotal), cgst: D(pc.cgstAmount), sgst: D(pc.sgstAmount), igst: D(pc.igstAmount) } : estimateCharge(charges[c.kind], highestGst, interState)] as const;
+    return [c.kind, pc ? { ex: D(pc.taxableValue), inc: D(pc.lineTotal), cgst: D(pc.cgstAmount), sgst: D(pc.sgstAmount), igst: D(pc.igstAmount) } : estimateCharge(chargeAmount(c.kind), c.kind === "CARTON" ? D(0) : highestGst, interState)] as const;
   }));
   const sumOf = (pick: (m: LineMoney) => ReturnType<typeof D>) =>
     [...rowMoney, ...chargeMoney.values()].reduce((s2, m) => (m ? s2.plus(pick(m)) : s2), D(0));
   const itemLines = preview?.lines ?? [];
-  const totalCartons = lines.reduce((s2, l) => { const p = products.find((x) => x.id === l.productId); return p && cartonPieces(l, p).greaterThan(0) ? s2.plus(D(linePieces(l, p)).div(cartonPieces(l, p))) : s2; }, D(0));
   const anyAmount = rowMoney.some((m) => m !== null);
   const grandTotal = preview ? D(preview.grandTotal) : sumOf((m) => m.inc);
   void itemLines;
@@ -229,7 +234,7 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
         </colgroup>
         <thead>
           <tr>
-            {["Sl no", "Description of goods", "HSN", "No of cartons", "Quantity per carton", "Total quantity", "Unit", "Rate (per unit)", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
+            {["Sl no", "Description of goods", "HSN", "No of cartons", "Quantity per carton", "Total quantity", "Quantity unit", "Rate (per unit)", "CGST", "SGST", "IGST", "Total amount", ""].map((h, i) => (
               <th key={i} className={`${th} relative`}>
                 {h}
                 {i < cols.length - 1 && (
@@ -315,12 +320,12 @@ export function BillSheet({ products, lines, filledLines, preview, charges, onCh
                 <td colSpan={3} className={`${td} px-2 py-1 font-bold uppercase`}>{c.label}</td>
                 <td colSpan={2} className={`${td} px-2 text-right font-bold`}>AMOUNT</td>
                 <td colSpan={3} className={td}>
-                  <input id={`charge-${c.kind}`} aria-label={c.label} inputMode="decimal" placeholder="0.00" className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50"
-                    value={charges[c.kind]} onChange={(e) => onCharges({ ...charges, [c.kind]: e.target.value })} onFocus={(e) => e.currentTarget.select()} />
+                  <input id={`charge-${c.kind}`} aria-label={c.label} inputMode="decimal" placeholder="0.00" readOnly={c.kind === "CARTON"} className="w-full bg-transparent px-1 py-1.5 text-right outline-none focus:bg-yellow-50 read-only:cursor-default"
+                    value={chargeAmount(c.kind)} onChange={(e) => onCharges({ ...charges, [c.kind]: e.target.value })} onFocus={(e) => e.currentTarget.select()} />
                 </td>
-                <td className={num}>{money && !interState ? formatAmount(money.cgst) : ""}</td>
-                <td className={num}>{money && !interState ? formatAmount(money.sgst) : ""}</td>
-                <td className={num}>{money && interState ? formatAmount(money.igst) : ""}</td>
+                <td className={num}>{money && c.kind !== "CARTON" && !interState ? formatAmount(money.cgst) : ""}</td>
+                <td className={num}>{money && c.kind !== "CARTON" && !interState ? formatAmount(money.sgst) : ""}</td>
+                <td className={num}>{money && c.kind !== "CARTON" && interState ? formatAmount(money.igst) : ""}</td>
                 <td className={`${num} font-semibold`}>{money ? formatAmount(money.ex) : ""}</td>
                 <td className={td} />
               </tr>

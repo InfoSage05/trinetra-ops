@@ -25,7 +25,7 @@ export type ChargeKey = "CARTON" | "CRATE" | "FREIGHT";
 export type Charges = Record<ChargeKey, string>;
 
 export const CHARGE_FIELDS: { kind: ChargeKey; label: string }[] = [
-  { kind: "CARTON", label: "Total carton charges" }, { kind: "CRATE", label: "Extra crate charges" }, { kind: "FREIGHT", label: "Freight charges" },
+  { kind: "CARTON", label: "Total carton charges (₹15 per carton)" }, { kind: "CRATE", label: "Extra crate charges" }, { kind: "FREIGHT", label: "Freight charges" },
 ];
 
 let nextRowId = 1;

@@ -42,7 +42,7 @@ function InvoicePdfDocument({ view, qrs }: { view: Plain<InvoiceView>; qrs: Qrs 
   const blanks = Math.max(0, MIN_ROWS - view.lines.length);
   const charge = (kind: string) => view.charges.find((c) => c.kind === kind);
   const chargeRows = [
-    { label: "TOTAL CARTON CHARGES", c: charge("CARTON") },
+    { label: "TOTAL CARTON CHARGES (₹15 PER CARTON)", c: charge("CARTON") },
     { label: "EXTRA CRATE CHARGES", c: charge("CRATE") },
     { label: "FREIGHT CHARGES", c: charge("FREIGHT") },
     ...view.charges.filter((c) => c.kind === "OTHER").map((c) => ({ label: c.label.toUpperCase(), c })),
@@ -161,14 +161,6 @@ function InvoicePdfDocument({ view, qrs }: { view: Plain<InvoiceView>; qrs: Qrs 
             </Cell>
             <Cell from={6} count={6}>
               <View style={[s.row, { justifyContent: "space-between" }]}>
-                <View>
-                  <Text style={s.bold}>Tax summary</Text>
-                  {view.taxSummary.map((r) => (
-                    <Text key={`${r.hsnCode}-${r.gstRate}`}>
-                      {r.hsnCode} @ {r.gstRate}%: {formatAmount(r.taxableValue)} + tax {formatAmount(Number(r.cgstAmount) + Number(r.sgstAmount) + Number(r.igstAmount))}
-                    </Text>
-                  ))}
-                </View>
                 <View style={s.row}>
                   {qrs.irnQr ? <View><Image style={s.qr} src={qrs.irnQr} /><Text style={{ fontSize: 6 }}>e-Invoice</Text></View> : null}
                   {qrs.upiQr ? <View><Image style={s.qr} src={qrs.upiQr} /><Text style={{ fontSize: 6 }}>Scan to pay {formatAmount(view.payment.amountDue)}</Text></View> : null}

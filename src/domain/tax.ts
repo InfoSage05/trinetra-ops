@@ -30,7 +30,7 @@ export function taxOnTaxableValue(taxableValue: DecimalInput, gstRate: DecimalIn
 }
 
 export function computeLine(
-  input: { quantity: DecimalInput; unitPrice: DecimalInput; discountAmount?: DecimalInput; gstRate: DecimalInput },
+  input: { quantity: DecimalInput; unitPrice: DecimalInput; discountAmount?: DecimalInput; gstRate: DecimalInput; priceIncludesGst?: boolean },
   interState: boolean
 ): LineAmounts {
   const grossAmount = round2(D(input.quantity).times(D(input.unitPrice)));
@@ -38,9 +38,14 @@ export function computeLine(
   if (discountAmount.isNegative() || discountAmount.greaterThan(grossAmount)) {
     throw new ValidationError("Discount must be between 0 and the line amount.");
   }
-  const taxableValue = grossAmount.minus(discountAmount);
+  const amountAfterDiscount = grossAmount.minus(discountAmount);
+  const taxableValue = input.priceIncludesGst
+    ? round2(amountAfterDiscount.div(D(1).plus(D(input.gstRate).div(100))))
+    : amountAfterDiscount;
   const tax = taxOnTaxableValue(taxableValue, input.gstRate, interState);
-  const lineTotal = taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount);
+  const lineTotal = input.priceIncludesGst
+    ? amountAfterDiscount
+    : taxableValue.plus(tax.cgstAmount).plus(tax.sgstAmount).plus(tax.igstAmount);
   return { grossAmount, discountAmount, taxableValue, ...tax, lineTotal };
 }
 

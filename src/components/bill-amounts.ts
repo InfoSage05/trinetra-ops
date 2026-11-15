@@ -39,7 +39,9 @@ export function estimateLine(product: BillableProduct | undefined, line: Line | 
   if (!product || !line) return null;
   const pieces = D(linePieces(line, product));
   if (!pieces.greaterThan(0)) return null;
-  return gstOn(round2(pieces.times(lineRate(product, line, billTier))), D(product.gstRate), interState);
+  const total = round2(pieces.times(lineRate(product, line, billTier)));
+  const taxable = round2(total.div(D(1).plus(D(product.gstRate).div(100))));
+  return gstOn(taxable, D(product.gstRate), interState);
 }
 
 /** A charge (carton, crate, freight) with GST at the highest rate among the items, as the server does by default. */

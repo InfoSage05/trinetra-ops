@@ -139,12 +139,12 @@ model Product {
   categoryId         String?
   category           Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   hsnCode            String
-  /// Rate B (normal wholesalers); also what any bill uses when a tier has no rate of its own.
-  unitPrice          Decimal             @db.Decimal(12, 2)
+  /// Rate B (normal wholesalers) normalized per piece; billing converts it to the chosen quantity unit.
+  unitPrice          Decimal             @db.Decimal(12, 4)
   /// Rate A (big wholesalers, lowest). Empty means "same as Rate B".
-  rateA              Decimal?            @db.Decimal(12, 2)
+  rateA              Decimal?            @db.Decimal(12, 4)
   /// Rate C (direct vendors, highest). Empty means "same as Rate B".
-  rateC              Decimal?            @db.Decimal(12, 2)
+  rateC              Decimal?            @db.Decimal(12, 4)
   gstRate            Decimal             @db.Decimal(5, 2)
   reorderLevel       Decimal             @default(0) @db.Decimal(12, 2)
   isActive           Boolean             @default(true)
@@ -442,8 +442,8 @@ model ProductRateChange {
   productId String
   product   Product  @relation(fields: [productId], references: [id])
   tier      RateTier
-  oldRate   Decimal? @db.Decimal(12, 2)
-  newRate   Decimal? @db.Decimal(12, 2)
+  oldRate   Decimal? @db.Decimal(12, 4)
+  newRate   Decimal? @db.Decimal(12, 4)
   reason    String?
   changedBy String
   changedAt DateTime @default(now())
